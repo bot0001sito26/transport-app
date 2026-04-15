@@ -25,6 +25,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 1. Definimos toda tu estructura de carpetas
+UPLOAD_DIRS = [
+    "uploads",
+    "uploads/alimentacion",
+    "uploads/combustible",
+    "uploads/fondos",
+    "uploads/gastos",
+    "uploads/guias",
+    "uploads/guias/remision",
+    "uploads/guias/sellada",
+    "uploads/mecanica",
+    "uploads/odometro",
+    "uploads/odometro/inicial",
+    "uploads/odometro/final",
+    "uploads/otros",
+    "uploads/peajes",
+    "uploads/sueldos",
+    "uploads/viaticos"
+]
+
+# 2. Creamos todas las carpetas dinámicamente si no existen
+for dir_path in UPLOAD_DIRS:
+    os.makedirs(dir_path, exist_ok=True)
+
+# 3. Montamos la carpeta principal para servir los estáticos
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
 # Incluir todas las rutas de la API desde el hub
