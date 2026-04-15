@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+@theme {
+    --color-atlas-yellow: #fbcc34;
+    --color-atlas-navy: #0c273c;
+}
