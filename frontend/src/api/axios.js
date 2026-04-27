@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'http://localhost:8000', // El puerto de tu backend en FastAPI
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000'// El puerto de tu backend en FastAPI
 });
 
 // Este interceptor asegura que si el usuario ya inició sesión, 
