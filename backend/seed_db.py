@@ -1,8 +1,13 @@
-from sqlalchemy.orm import Session  # pylint: disable=unused-import
-from app.db.database import SessionLocal
-from app.models.users import User
-from app.models.trucks import Truck
 from app.core.security import get_password_hash
+from app.models.trucks import Truck
+from app.models.users import User
+from app.db.database import SessionLocal
+from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
+
+# 1. Cargar el entorno ANTES de cualquier import de la app
+load_dotenv()
 
 
 def seed_database():
@@ -59,7 +64,7 @@ def seed_database():
 
         print("--- Proceso de Seed finalizado con éxito ---")
 
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:
         print(f"Error durante el seed: {str(e)}")
         db.rollback()
     finally:
