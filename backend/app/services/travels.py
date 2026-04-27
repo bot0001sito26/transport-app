@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from datetime import datetime
 from typing import Optional, List
 from app.models.travels import Travel, TravelDestination, TravelGuide
-from app.schemas.travels import TravelCreate, TravelStart, TravelFinish, TravelDeliver, GuideType
+from app.schemas.travels import TravelCreate, TravelStart, TravelFinish, TravelDeliver, GuideType, TravelPaymentUpdate
 from app.models.users import User
 from app.models.trucks import Truck
 
@@ -18,24 +18,25 @@ def create_travel_service(db: Session, travel_in: TravelCreate, current_user):  
             extra_official_id=travel_in.extra_official_id,
             material_type=travel_in.material_type,
             weight_kg=travel_in.weight_kg,
-            status="cargado"
+            status="cargado",
+            billing_status="pendiente",
+            amount_paid=0.0
         )
         db.add(db_travel)
-        db.flush()  # Obtenemos el ID del viaje recién creado
+        db.flush()
 
-        # --- CONECTAR EL VIAJE CON EL CAMIÓN (Para que salga 'En Ruta') ---
         truck = db.query(Truck).filter(Truck.id == travel_in.truck_id).first()
         if truck:
             truck.current_travel_id = db_travel.id
-            truck.status = "activo"  # <-- Aseguramos el estado de forma explícita
-            db.add(truck)  # <-- Forzamos el guardado en la sesión
-        # ------------------------------------------------------------------
+            truck.status = "activo"
+            db.add(truck)
 
         for dest_in in travel_in.destinations:
             db_dest = TravelDestination(
                 travel_id=db_travel.id,
                 client_name=dest_in.client_name,
-                status="pendiente"
+                status="pendiente",
+                packing_list_url=dest_in.packing_list_url
             )
             db.add(db_dest)
             db.flush()
@@ -92,8 +93,10 @@ def deliver_travel_service(db: Session, travel_id: int, travel_in: TravelDeliver
     for dest_in in travel_in.delivered_destinations:
         db_dest = db.query(TravelDestination).filter(
             TravelDestination.id == dest_in.destination_id).first()
+
         if db_dest and db_dest.status == "pendiente":
             db_dest.status = "entregado"
+            db_dest.stowage_photo_url = dest_in.stowage_photo_url
 
             for photo in dest_in.delivery_photos:
                 db_guide = TravelGuide(
@@ -142,7 +145,6 @@ def finish_travel_service(db: Session, travel_id: int, travel_in: TravelFinish, 
         truck.current_travel_id = None
         truck.status = "inactivo"
         db.add(truck)
-    # ----------------------------------------------------------------
 
     db.add(travel)
     db.commit()
@@ -150,6 +152,28 @@ def finish_travel_service(db: Session, travel_id: int, travel_in: TravelFinish, 
     return travel
 
 
+# --- SERVICIO DE FACTURACIÓN ---
+def pay_travel_service(db: Session, travel_id: int, payment_in: TravelPaymentUpdate, current_user: User) -> Travel:
+    if current_user.role not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=403, detail="Solo gerencia puede registrar facturas de viajes")
+
+    travel = db.query(Travel).filter(Travel.id == travel_id).first()
+    if not travel:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    travel.billing_status = "pagado"
+    travel.amount_paid = payment_in.amount_paid
+    if payment_in.invoice_url:
+        travel.invoice_url = payment_in.invoice_url
+
+    db.add(travel)
+    db.commit()
+    db.refresh(travel)
+    return travel
+
+
+# --- SERVICIOS DE CONSULTA ---
 def get_active_trip_for_truck_service(db: Session, truck_id: int) -> Optional[Travel]:
     return db.query(Travel).filter(
         Travel.truck_id == truck_id,
@@ -172,4 +196,4 @@ def get_travels_service(db: Session, _current_user: User, skip: int = 0, limit: 
         selectinload(Travel.destinations).selectinload(
             TravelDestination.guides)
     )
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(desc(Travel.id)).offset(skip).limit(limit).all()

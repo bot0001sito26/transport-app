@@ -16,8 +16,6 @@ class TruckBase(BaseModel):
     brand: str
     model: str
     capacity_tons: float
-    tracking_type: str  # 'tracklink' o 'telegram'
-    tracklink_id: Optional[str] = None
     current_balance: Optional[float] = 0.0
     status: str = "disponible"
     current_travel_id: Optional[int] = None
@@ -31,8 +29,6 @@ class TruckUpdate(BaseModel):
     brand: Optional[str] = None
     model: Optional[str] = None
     capacity_tons: Optional[float] = None
-    tracking_type: Optional[str] = None
-    tracklink_id: Optional[str] = None
     status: Optional[str] = None
     current_travel_id: Optional[int] = None
 
@@ -43,6 +39,7 @@ class Truck(TruckBase):
 
     driver: Optional[UserSummary] = None
     official: Optional[UserSummary] = None
+    extra_official: Optional[UserSummary] = None
     model_config = ConfigDict(from_attributes=True)
 
 

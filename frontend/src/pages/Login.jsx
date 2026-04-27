@@ -79,7 +79,8 @@ export default function Login() {
                             placeholder="admin o empresa123"
                             value={username}
                             onChange={(e) => {
-                                setUsername(e.target.value);
+                                // Convertimos directamente a minúsculas todo lo que el usuario escriba
+                                setUsername(e.target.value.toLowerCase());
                                 if (fieldErrors.username) setFieldErrors({ ...fieldErrors, username: null });
                             }}
                         />

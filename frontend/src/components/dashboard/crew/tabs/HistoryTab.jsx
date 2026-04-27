@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../api/axios';
-import { Route, Filter, ChevronDown, CheckCircle, Download, Loader2, X, Search, Image as ImageIcon, ShieldCheck } from 'lucide-react';
+import { Route, Filter, CheckCircle, Download, Loader2, X, Search, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { generateTripSummaryPDF } from '../../../../utils/pdfGenerator';
 
 function TripHistoryCard({ trip, formatDateTime, handleOpenPreview, onOpenLiquidation }) {
@@ -25,9 +25,13 @@ function TripHistoryCard({ trip, formatDateTime, handleOpenPreview, onOpenLiquid
         const items = [];
         if (trip.start_odometer_photo_url) items.push({ url: trip.start_odometer_photo_url, label: 'KM INI' });
         if (trip.end_odometer_photo_url) items.push({ url: trip.end_odometer_photo_url, label: 'KM FIN' });
+
         trip.destinations?.forEach(dest => {
             dest.guides?.forEach(g => items.push({ url: g.photo_url, label: g.guide_type === 'carga' ? 'GUÍA' : 'SELLO' }));
+            if (dest.packing_list_url) items.push({ url: dest.packing_list_url, label: 'LISTA EMB.' });
+            if (dest.stowage_photo_url) items.push({ url: dest.stowage_photo_url, label: 'ESTIBAS' });
         });
+
         expenses?.forEach(exp => {
             if (exp.photo_url) items.push({ url: exp.photo_url, label: 'GASTO' });
         });
@@ -44,10 +48,9 @@ function TripHistoryCard({ trip, formatDateTime, handleOpenPreview, onOpenLiquid
     };
 
     return (
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm mb-4">
+        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm mb-3 shrink-0 animate-in slide-in-from-right-2">
             <div className="flex justify-between items-start mb-3 gap-3">
                 <div className="flex-1 min-w-0">
-                    {/* CORRECCIÓN: line-clamp-2 permite que el texto ocupe dos líneas sin cortarse drásticamente */}
                     <h5 className="text-sm md:text-base font-black text-atlas-navy leading-tight uppercase tracking-tight line-clamp-2 pr-2">{destinationName}</h5>
                     <div className="flex items-center gap-1.5 mt-1">
                         <CheckCircle className="w-4 h-4 text-emerald-500" />
@@ -73,14 +76,16 @@ function TripHistoryCard({ trip, formatDateTime, handleOpenPreview, onOpenLiquid
             <div className="flex flex-wrap md:flex-nowrap items-center justify-between mt-3 pt-3 border-t border-slate-100 gap-3">
                 <div className="flex gap-2 overflow-x-auto hide-scrollbar w-full md:w-auto">
                     {gallery.map((img, idx) => (
-                        <div key={idx} onClick={() => handleOpenPreview && handleOpenPreview(img.url, img.label)} className="relative shrink-0 w-10 h-10 rounded-md overflow-hidden border border-slate-200 cursor-pointer">
+                        <div key={idx} onClick={() => handleOpenPreview && handleOpenPreview(img.url, img.label)} className="relative shrink-0 w-10 h-10 rounded-md overflow-hidden border border-slate-200 cursor-pointer group">
                             <img src={img.url.startsWith('http') ? img.url : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}`.replace(/\/api.*$/, '') + img.url} alt={img.label} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[8px] text-white font-bold text-center leading-tight px-1">{img.label}</span>
+                            </div>
                         </div>
                     ))}
                 </div>
 
                 <div className="flex gap-2 shrink-0 w-full md:w-auto justify-end">
-                    {/* CORRECCIÓN: Botón PDF en color corporativo (atlas-navy) en lugar del gris pálido */}
                     <button onClick={handleDownloadPDF} disabled={isDownloading} className="text-[10px] md:text-xs font-black text-white bg-atlas-navy border border-transparent hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 w-full md:w-auto">
                         {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
                     </button>
@@ -96,15 +101,22 @@ function TripHistoryCard({ trip, formatDateTime, handleOpenPreview, onOpenLiquid
 }
 
 export default function HistoryTab({ truckId, formatDateTime, handleOpenPreview, onOpenLiquidation }) {
-    const [startDate, setStartDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()));
+    // Filtros vacíos por defecto
+    const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [searchTripId, setSearchTripId] = useState('');
-    const [historyLimit, setHistoryLimit] = useState(20);
 
-    const { data: tripHistory } = useQuery({
-        queryKey: ['tripHistory', truckId, historyLimit],
+    // Paginación (5 items para no asfixiar la vista móvil)
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5;
+
+    // Reiniciar página si cambian los filtros
+    useEffect(() => { setCurrentPage(1); }, [startDate, endDate, searchTripId]);
+
+    const { data: tripHistory, isLoading } = useQuery({
+        queryKey: ['tripHistory', truckId],
         queryFn: async () => {
-            try { return (await api.get(`/travels/history/${truckId}?limit=${historyLimit}&skip=0`)).data; } catch { return []; }
+            try { return (await api.get(`/travels/history/${truckId}?limit=1000&skip=0`)).data; } catch { return []; }
         },
         enabled: !!truckId
     });
@@ -120,15 +132,28 @@ export default function HistoryTab({ truckId, formatDateTime, handleOpenPreview,
         if (searchTripId) result = tripHistory.filter(trip => trip.id.toString() === searchTripId);
         else if (startDate && endDate) result = tripHistory.filter(t => getEcuadorDateString(t.end_time || t.created_at) >= startDate && getEcuadorDateString(t.end_time || t.created_at) <= endDate);
         else if (startDate) result = tripHistory.filter(t => getEcuadorDateString(t.end_time || t.created_at) === startDate);
+        else if (endDate) result = tripHistory.filter(t => getEcuadorDateString(t.end_time || t.created_at) <= endDate);
+
         return [...result].sort((a, b) => b.id - a.id);
     }, [tripHistory, startDate, endDate, searchTripId]);
+
+    // Calcular datos de paginación
+    const totalPages = Math.ceil(filteredHistory.length / itemsPerPage) || 1;
+    const paginatedHistory = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredHistory.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredHistory, currentPage]);
 
     const clearFilters = () => { setStartDate(''); setEndDate(''); setSearchTripId(''); };
     const hasActiveFilters = startDate || endDate || searchTripId;
 
+    if (isLoading) {
+        return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-atlas-yellow" /></div>;
+    }
+
     if (!tripHistory || tripHistory.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center h-[350px] animate-in fade-in">
+            <div className="flex flex-col items-center justify-center h-80 animate-in fade-in">
                 <Route className="w-10 h-10 text-slate-300 mb-3" />
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">SIN VIAJES REGISTRADOS</p>
             </div>
@@ -136,8 +161,8 @@ export default function HistoryTab({ truckId, formatDateTime, handleOpenPreview,
     }
 
     return (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm min-h-[350px] flex flex-col animate-in fade-in duration-300">
-            <div className="flex flex-col gap-3 mb-4 pb-4 border-b border-slate-100">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm h-[75vh] md:h-[65vh] flex flex-col animate-in fade-in duration-300">
+            <div className="flex flex-col gap-3 mb-4 pb-4 border-b border-slate-100 shrink-0">
                 <div className="flex justify-between items-center">
                     <h4 className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Route className="w-4 h-4" /> HISTORIAL OPERATIVO</h4>
                     {hasActiveFilters && <button onClick={clearFilters} className="p-1.5 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100"><X className="w-4 h-4" /></button>}
@@ -155,8 +180,8 @@ export default function HistoryTab({ truckId, formatDateTime, handleOpenPreview,
                 </div>
             </div>
 
-            <div className="space-y-1 flex-1">
-                {filteredHistory?.length > 0 ? filteredHistory.map((trip) => (
+            <div className="space-y-1 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                {paginatedHistory.length > 0 ? paginatedHistory.map((trip) => (
                     <TripHistoryCard key={trip.id} trip={trip} formatDateTime={formatDateTime} handleOpenPreview={handleOpenPreview} onOpenLiquidation={onOpenLiquidation} />
                 )) : (
                     <div className="text-center py-12">
@@ -166,10 +191,34 @@ export default function HistoryTab({ truckId, formatDateTime, handleOpenPreview,
                 )}
             </div>
 
-            {tripHistory?.length >= historyLimit && !hasActiveFilters && (
-                <button onClick={() => setHistoryLimit(prev => prev + 20)} className="mt-4 w-full py-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] md:text-xs font-black text-atlas-navy uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-100">
-                    <ChevronDown className="w-4 h-4" /> CARGAR MÁS RUTAS
-                </button>
+            {/* Controles de Paginación Fijos al fondo */}
+            {totalPages > 1 && (
+                <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between shrink-0">
+                    <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                        className="p-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 transition-colors"
+                    >
+                        <ChevronLeft className="w-4 h-4 text-atlas-navy" />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:inline">Página</span>
+                        <div className="bg-slate-50 px-3 py-1 rounded-md border border-slate-200">
+                            <span className="text-xs font-black text-atlas-navy">{currentPage}</span>
+                            <span className="text-[10px] font-bold text-slate-400 mx-1">/</span>
+                            <span className="text-[10px] font-bold text-slate-400">{totalPages}</span>
+                        </div>
+                    </div>
+
+                    <button
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        className="p-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 transition-colors"
+                    >
+                        <ChevronRight className="w-4 h-4 text-atlas-navy" />
+                    </button>
+                </div>
             )}
         </div>
     );

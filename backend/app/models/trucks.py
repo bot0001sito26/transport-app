@@ -12,18 +12,10 @@ class Truck(Base):
     model = Column(String)
     capacity_tons = Column(Float)
 
-    # LA BILLETERA DEL CAMIÓN (Fondo de Ruta)
     current_balance = Column(Float, default=0.0)
-
-    # Configuración de GPS
-    tracking_type = Column(String, index=True)  # 'tracklink' o 'telegram'
-    tracklink_id = Column(String, nullable=True)
-
     status = Column(String, default="disponible", index=True)
     current_travel_id = Column(Integer, nullable=True)
-    # -----------------------------------------------
 
-    # Relación con el dueño
     owner_id = Column(Integer, ForeignKey("users.id"), index=True)
 
     driver = relationship(
@@ -38,4 +30,11 @@ class Truck(Base):
         primaryjoin="and_(Truck.id==User.assigned_truck_id, User.role=='official')",
         uselist=False,
         overlaps="assigned_truck,driver"
+    )
+
+    extra_official = relationship(
+        "User",
+        primaryjoin="and_(Truck.id==User.assigned_truck_id, User.role=='extra_official')",
+        uselist=False,
+        overlaps="assigned_truck,driver,official"
     )

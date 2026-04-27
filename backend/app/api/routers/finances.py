@@ -59,7 +59,6 @@ def add_truck_fund(
 
     truck.current_balance = (truck.current_balance or 0.0) + fund_in.amount
     db.add(truck)
-
     db.commit()
     return {"message": "Fondo recargado con éxito", "new_balance": truck.current_balance}
 
@@ -68,6 +67,7 @@ def add_truck_fund(
 def get_truck_funds(truck_id: int, db: Session = Depends(get_db), _current_user: User = Depends(get_current_user)):
     """Obtiene el historial de inyecciones de capital del camión."""
     return db.query(TruckFund).filter(TruckFund.truck_id == truck_id).order_by(TruckFund.created_at.desc()).all()
+
 # -------------------------------------------------------------------------
 
 
@@ -85,16 +85,6 @@ def create_salary(salary_in: SalaryCreate, db: Session = Depends(get_db), curren
 def create_expense(expense_in: ExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     new_expense = finance_service.create_expense_service(
         db=db, expense_in=expense_in, _current_user=current_user)
-
-    # AHORA: Todo gasto registrado a un camión descuenta automáticamente del fondo de caja chica
-    if expense_in.truck_id:
-        truck = db.query(Truck).filter(Truck.id == expense_in.truck_id).first()
-        if truck:
-            truck.current_balance = max(
-                0.0, (truck.current_balance or 0.0) - expense_in.amount)
-            db.add(truck)
-            db.commit()
-
     return new_expense
 
 
@@ -120,5 +110,20 @@ def get_user_salaries(user_id: int, skip: int = 0, limit: int = 20, db: Session 
 
 @router.get("/expenses/truck/{truck_id}", response_model=List[ExpenseSchema])
 def get_truck_expenses(truck_id: int, db: Session = Depends(get_db), _current_user: User = Depends(get_current_user)):
-    # SE QUITÓ EL .limit(50) - Ahora devuelve todo el historial
     return db.query(Expense).options(joinedload(Expense.user)).filter(Expense.truck_id == truck_id).order_by(Expense.created_at.desc()).all()
+
+
+@router.get("/", response_model=List[ExpenseSchema])
+def get_all_expenses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _current_user: User = Depends(get_current_user)):
+    """Obtiene todos los gastos registrados (Ruta y Patio) para el balance global."""
+    return db.query(Expense).options(joinedload(Expense.user)).order_by(Expense.created_at.desc()).offset(skip).limit(limit).all()
+
+
+@router.get("/salaries/", response_model=List[SalarySchema])
+def get_all_salaries(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _current_user: User = Depends(get_current_user)):
+    return db.query(Salary).order_by(Salary.date_paid.desc()).offset(skip).limit(limit).all()
+
+
+@router.get("/advances/", response_model=List[AdvanceSchema])
+def get_all_advances(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _current_user: User = Depends(get_current_user)):
+    return db.query(Advance).order_by(Advance.date_given.desc()).offset(skip).limit(limit).all()

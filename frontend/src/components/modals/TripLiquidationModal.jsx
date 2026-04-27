@@ -16,7 +16,7 @@ export default function TripLiquidationModal({ isOpen, onClose, travelId }) {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-110 flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
 
                 {/* CABECERA */}
@@ -76,12 +76,12 @@ export default function TripLiquidationModal({ isOpen, onClose, travelId }) {
                             </div>
 
                             {/* SECCIÓN 2: GASTOS CARGADOS A LA RUTA */}
-                            <div className="p-6 rounded-[2rem] bg-atlas-navy text-white flex items-center justify-between shadow-lg">
+                            <div className="p-6 rounded-4xl bg-atlas-navy text-white flex items-center justify-between shadow-lg">
                                 <div>
                                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-1">
                                         <Receipt className="w-3 h-3 text-atlas-yellow" /> Gastos Registrados en Ruta
                                     </h4>
-                                    <p className="text-[10px] font-medium text-slate-300 max-w-[200px] mt-1 leading-tight">
+                                    <p className="text-[10px] font-medium text-slate-300 max-w-50 mt-1 leading-tight">
                                         Total descontado de la Caja Chica durante este viaje.
                                     </p>
                                 </div>

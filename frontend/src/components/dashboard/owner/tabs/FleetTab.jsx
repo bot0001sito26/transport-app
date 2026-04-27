@@ -33,7 +33,6 @@ export default function FleetTab({ user, setSelectedTruckId, showAlert }) {
 
     return (
         <div className="space-y-3 animate-in fade-in duration-300">
-            {/* CORRECCIÓN: Etiqueta de Total de Flota agregada */}
             <div className="flex justify-between items-center px-1 mb-1">
                 <span className="inline-flex items-center gap-1.5 bg-atlas-yellow text-atlas-navy px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest shadow-sm">
                     <Truck className="w-3.5 h-3.5" /> Total Flota: {trucks.length} Unidades
@@ -76,11 +75,13 @@ export default function FleetTab({ user, setSelectedTruckId, showAlert }) {
                                         {isActivo && <span className="w-1.5 h-1.5 rounded-full bg-atlas-yellow animate-pulse"></span>}
                                     </div>
                                     <div className="flex items-center gap-1.5 mt-0.5">
-                                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest truncate max-w-[80px]">{truck.brand}</p>
+                                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest truncate max-w-20">{truck.brand}</p>
                                         <span className="text-slate-300">•</span>
                                         <div className="flex items-center text-emerald-600 gap-0.5">
                                             <Wallet className="w-2.5 h-2.5" />
-                                            <span className="text-[10px] font-black">${truck.current_balance?.toFixed(0) || '0'}</span>
+                                            <span className="text-[10px] font-black">
+                                                ${truck.current_balance?.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -121,7 +122,9 @@ export default function FleetTab({ user, setSelectedTruckId, showAlert }) {
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-1.5 text-emerald-600">
                                             <Wallet className="w-4 h-4" />
-                                            <span className="text-[12px] font-black">${truck.current_balance?.toFixed(2) || '0.00'}</span>
+                                            <span className="text-[12px] font-black">
+                                                ${truck.current_balance?.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                                            </span>
                                         </div>
                                     </td>
                                     <td className="py-3 px-4">

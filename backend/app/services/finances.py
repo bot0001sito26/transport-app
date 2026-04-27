@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from app.models.finances import Advance, Expense, Salary
 from app.models.travels import Travel
 from app.models.users import User
+from app.models.trucks import Truck
 from app.schemas.finances import AdvanceCreate, ExpenseCreate, SalaryCreate
 from sqlalchemy import func
 import traceback
@@ -41,7 +42,18 @@ def create_salary_service(db: Session, salary_in: SalaryCreate, current_user: Us
 
 
 def create_expense_service(db: Session, expense_in: ExpenseCreate, _current_user: User) -> Expense:
-    # 1. Validar el viaje SOLO si se envía un travel_id
+    # 1. Verificar el camión y validar que tenga fondos suficientes
+    truck = db.query(Truck).filter(Truck.id == expense_in.truck_id).first()
+    if not truck:
+        raise HTTPException(status_code=404, detail="Camión no encontrado")
+
+    if truck.current_balance < expense_in.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Fondo insuficiente en la unidad. Saldo actual: ${truck.current_balance:.2f}"
+        )
+
+    # 2. Validar el viaje SOLO si se envía un travel_id
     if expense_in.travel_id:
         travel = db.query(Travel).filter(
             Travel.id == expense_in.travel_id).first()
@@ -50,31 +62,37 @@ def create_expense_service(db: Session, expense_in: ExpenseCreate, _current_user
 
     category = expense_in.category.lower()
 
-    # 2. Validación estricta para Combustible
+    # 3. Validación estricta para Combustible
     if category == "combustible":
         if not expense_in.gallons or not expense_in.odometer_reading:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Para combustible es obligatorio registrar los galones y el odómetro actual."
             )
         if not expense_in.photo_url:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="El comprobante (foto) del combustible es obligatorio."
             )
 
-    # 3. Validación estricta para Peajes
+    # 4. Validación estricta para Peajes
     if category == "peaje":
         if not expense_in.photo_url:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Para registrar un peaje es obligatorio subir la foto del ticket."
             )
 
+    # 5. Descontar el dinero de la caja chica del camión (LA CORRECCIÓN)
+    truck.current_balance -= expense_in.amount
+
+    # 6. Guardar el gasto
     db_expense = Expense(**expense_in.model_dump())
     db.add(db_expense)
+    db.add(truck)  # Guardamos el nuevo saldo del camión
     db.commit()
     db.refresh(db_expense)
+
     return db_expense
 
 
@@ -102,18 +120,15 @@ def get_trip_liquidation_service(db: Session, travel_id: int) -> dict:
         material = getattr(travel, 'material_type', getattr(
             travel, 'material', "SIN ESPECIFICAR")) or "SIN ESPECIFICAR"
 
-        # --- NUEVA LÓGICA DE EXTRACCIÓN DE DESTINOS ---
+        # --- LÓGICA DE EXTRACCIÓN DE DESTINOS ---
         destino = "SIN DESTINO"
         if hasattr(travel, 'destinations') and travel.destinations:
-            # Si es la nueva versión multipunto, une todos los nombres
             nombres = [d.client_name for d in travel.destinations if hasattr(
                 d, 'client_name')]
             if nombres:
                 destino = " / ".join(nombres)
         elif getattr(travel, 'destination_client', None):
-            # Si es un viaje viejo con formato antiguo
             destino = travel.destination_client
-        # ----------------------------------------------
 
         return {
             "travel_id": travel.id,

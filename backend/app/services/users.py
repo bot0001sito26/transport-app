@@ -14,11 +14,11 @@ def create_user_service(db: Session, user_in: UserCreate, current_user: User) ->
                 detail="Un Administrador solo puede crear usuarios con el rol 'owner'"
             )
     elif current_user.role == "owner":
-        # Solo permitimos 'driver' y 'official'
-        if user_in.role not in ["driver", "official"]:
+        # Solo permitimos 'driver', 'official' y 'extra_official'
+        if user_in.role not in ["driver", "official", "extra_official"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Rol '{user_in.role}' no permitido. Un Dueño solo puede crear 'driver' o 'official'."
+                detail=f"Rol '{user_in.role}' no permitido. Un Dueño solo puede crear 'driver', 'official' o 'extra_official'."
             )
     else:
         raise HTTPException(

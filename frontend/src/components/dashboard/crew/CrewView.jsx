@@ -92,14 +92,17 @@ export default function CrewView({ user }) {
                     </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-slate-800">
-                    <button
-                        onClick={() => setExpenseModalOpen(true)}
-                        className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-atlas-yellow text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors border border-slate-700 flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
-                    >
-                        <Receipt className="w-3.5 h-3.5" /> Registrar Gasto Libre (Patio)
-                    </button>
-                </div>
+                {/* Mostrar botón de patio SOLO si NO hay un viaje activo */}
+                {!activeTrip && (
+                    <div className="mt-3 pt-3 border-t border-slate-800">
+                        <button
+                            onClick={() => setExpenseModalOpen(true)}
+                            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-atlas-yellow text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors border border-slate-700 flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
+                        >
+                            <Receipt className="w-3.5 h-3.5" /> Registrar Gasto Libre (Patio)
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Tabs compactadas con texto ligeramente más pequeño */}

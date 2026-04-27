@@ -55,7 +55,7 @@ function AppRouter() {
     <div className="relative">
       {/* BANNER FLOTANTE DE IMPERSONACIÓN */}
       {impersonatedUser && (
-        <div className="bg-amber-500 text-white px-6 py-2 flex justify-between items-center text-[10px] font-black uppercase tracking-widest sticky top-0 z-[200] shadow-md animate-in slide-in-from-top-4">
+        <div className="bg-amber-500 text-white px-6 py-2 flex justify-between items-center text-[10px] font-black uppercase tracking-widest sticky top-0 z-200 shadow-md animate-in slide-in-from-top-4">
           <span>MODO VISUALIZACIÓN: PANEL DE {impersonatedUser.full_name}</span>
           <button
             onClick={stopImpersonation}

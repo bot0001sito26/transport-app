@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.db.database import Base
+from app.core.timezone import ecuador_now
 
 
 class Advance(Base):
@@ -13,8 +13,11 @@ class Advance(Base):
     amount = Column(Float)
     description = Column(String)
     photo_url = Column(String)
-    # Guardamos hora local de Ecuador directamente
-    date_given = Column(DateTime, default=datetime.now, index=True)
+    date_given = Column(DateTime, default=ecuador_now, index=True)
+
+    __table_args__ = (
+        Index('ix_advances_user_date', 'user_id', 'date_given'),
+    )
 
 
 class Expense(Base):
@@ -30,11 +33,15 @@ class Expense(Base):
     gallons = Column(Float, nullable=True)
     odometer_reading = Column(Float, nullable=True)
     photo_url = Column(String, nullable=True)
-    # Guardamos hora local de Ecuador directamente
-    created_at = Column(DateTime, default=datetime.now, index=True)
+    created_at = Column(DateTime, default=ecuador_now, index=True)
 
     user = relationship("User")
     truck = relationship("Truck")
+
+    __table_args__ = (
+        Index('ix_expenses_truck_date', 'truck_id', 'created_at'),
+        Index('ix_expenses_travel_date', 'travel_id', 'created_at'),
+    )
 
 
 class Salary(Base):
@@ -44,7 +51,11 @@ class Salary(Base):
     amount = Column(Float)
     description = Column(String)
     photo_url = Column(String)
-    date_paid = Column(DateTime, default=datetime.now, index=True)
+    date_paid = Column(DateTime, default=ecuador_now, index=True)
+
+    __table_args__ = (
+        Index('ix_salaries_user_date', 'user_id', 'date_paid'),
+    )
 
 
 class TruckFund(Base):
@@ -54,7 +65,11 @@ class TruckFund(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     amount = Column(Float)
     photo_url = Column(String)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=ecuador_now, index=True)
 
     truck = relationship("Truck")
     user = relationship("User")
+
+    __table_args__ = (
+        Index('ix_truck_funds_truck_date', 'truck_id', 'created_at'),
+    )

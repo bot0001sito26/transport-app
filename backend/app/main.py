@@ -1,13 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.db.database import engine, Base
 import app.models
 from app.api.routers import api_router  # Importamos el hub central
 from fastapi.staticfiles import StaticFiles
-import os  # pylint: disable=unused-import
-
-# Crear tablas
-Base.metadata.create_all(bind=engine)
+import os
 
 app = FastAPI(
     title="Transport - Sistema de Gestión Logística",
@@ -25,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. Definimos toda tu estructura de carpetas
+# 1. Definimos toda tu estructura de carpetas para mantener el orden
 UPLOAD_DIRS = [
     "uploads",
     "uploads/alimentacion",
@@ -50,8 +46,7 @@ for dir_path in UPLOAD_DIRS:
     os.makedirs(dir_path, exist_ok=True)
 
 # 3. Montamos la carpeta principal para servir los estáticos
-app.mount("/static", StaticFiles(directory="uploads"), name="static")
-
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # Incluir todas las rutas de la API desde el hub
 app.include_router(api_router)
 

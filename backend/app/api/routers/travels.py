@@ -3,7 +3,14 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.db.database import get_db
-from app.schemas.travels import Travel as TravelSchema, TravelCreate, TravelStart, TravelFinish, TravelDeliver
+from app.schemas.travels import (
+    Travel as TravelSchema,
+    TravelCreate,
+    TravelStart,
+    TravelFinish,
+    TravelDeliver,
+    TravelPaymentUpdate
+)
 from app.api.deps import get_current_user
 from app.models.users import User
 from app.services import travels as travel_service
@@ -28,7 +35,6 @@ def get_truck_history(
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user)
 ):
-    """Obtiene el historial de viajes finalizados y liquidados de un camión, con paginación."""
     return travel_service.get_truck_history_service(
         db=db,
         truck_id=truck_id,
@@ -69,7 +75,6 @@ def deliver_travel(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """PASO 3: Entrega la carga en obra. Pasa de 'en_curso' a 'retornando'."""
     return travel_service.deliver_travel_service(
         db=db,
         travel_id=travel_id,
@@ -105,4 +110,19 @@ def read_travels(
         _current_user=current_user,
         skip=skip,
         limit=limit
+    )
+
+
+@router.patch("/{travel_id}/pay", response_model=TravelSchema)
+def pay_travel(
+    travel_id: int,
+    payment_in: TravelPaymentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return travel_service.pay_travel_service(
+        db=db,
+        travel_id=travel_id,
+        payment_in=payment_in,
+        current_user=current_user
     )

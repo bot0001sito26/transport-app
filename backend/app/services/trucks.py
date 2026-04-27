@@ -29,7 +29,8 @@ def create_truck_service(db: Session, truck_in: TruckCreate, current_user: User)
 def get_trucks_service(db: Session, current_user: User, skip: int = 0, limit: int = 100):
     query = db.query(Truck).options(
         joinedload(Truck.driver),
-        joinedload(Truck.official)
+        joinedload(Truck.official),
+        joinedload(Truck.extra_official)
     )
 
     if current_user.role == "admin":
@@ -46,14 +47,15 @@ def get_truck_service(db: Session, truck_id: int, current_user: User):
 
     truck = db.query(Truck).options(
         joinedload(Truck.driver),
-        joinedload(Truck.official)
+        joinedload(Truck.official),
+        joinedload(Truck.extra_official)
     ).filter(Truck.id == truck_id).first()
 
     if not truck:
         raise HTTPException(status_code=404, detail="Camión no encontrado")
 
     is_assigned_staff = (
-        current_user.role in ["driver", "official"] and
+        current_user.role in ["driver", "official", "extra_official"] and
         current_user.assigned_truck_id == truck.id
     )
 
@@ -69,6 +71,10 @@ def get_truck_service(db: Session, truck_id: int, current_user: User):
     if truck.official:
         setattr(truck.official, "current_balance",
                 get_user_current_balance(db, truck.official.id))
+
+    if truck.extra_official:
+        setattr(truck.extra_official, "current_balance",
+                get_user_current_balance(db, truck.extra_official.id))
 
     return truck
 
@@ -98,7 +104,7 @@ def get_truck_stats_service(db: Session, truck_id: int, current_user: User):
     if not truck:
         raise HTTPException(status_code=404, detail="Camión no encontrado")
 
-    # 2. Verificamos permisos: Solo admin, dueño o personal asignado pueden ver las estadísticasif current_user.role != "admin" and truck.owner_id != current_user.id:
+    # 2. Verificamos permisos: Solo admin, dueño o personal asignado pueden ver las estadísticas
     if current_user.role != "admin" and truck.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,

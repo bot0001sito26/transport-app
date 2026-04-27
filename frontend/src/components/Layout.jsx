@@ -27,7 +27,7 @@ export default function Layout({ children }) {
                         {/* Derecha: Usuario y Logout */}
                         <div className="flex items-center gap-3 sm:gap-4">
                             <div className="text-right">
-                                <p className="text-xs font-bold text-white max-w-[120px] sm:max-w-none truncate">
+                                <p className="text-xs font-bold text-white max-w-30 sm:max-w-none truncate">
                                     {user?.full_name}
                                 </p>
                                 <p className="text-[9px] text-atlas-yellow uppercase tracking-widest font-bold">

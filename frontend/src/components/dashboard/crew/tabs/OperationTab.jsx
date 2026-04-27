@@ -58,7 +58,7 @@ export default function OperationTab({ user, truck, activeTrip, refetchActiveTri
                     <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex justify-between items-start mb-4">
                             <div>
-                                <h3 className="text-base md:text-lg font-black text-atlas-navy leading-tight tracking-tight uppercase truncate max-w-[220px] sm:max-w-md">{activeTrip.destination_client}</h3>
+                                <h3 className="text-base md:text-lg font-black text-atlas-navy leading-tight tracking-tight uppercase truncate max-w-55 sm:max-w-md">{activeTrip.destination_client}</h3>
                                 <div className="flex items-center gap-1.5 text-slate-500 mt-1.5">
                                     <MapPin className="w-4 h-4 text-atlas-yellow" />
                                     <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">DESTINO ASIGNADO</span>
@@ -185,6 +185,7 @@ export default function OperationTab({ user, truck, activeTrip, refetchActiveTri
                 travelId={activeTrip?.id}
                 truckId={truck?.id}
                 truck={truck}
+                destinations={activeTrip?.destinations || []} // <-- AQUÍ ESTÁ LA LÍNEA MÁGICA
                 onSuccess={() => { setIsFinishModalOpen(false); handleSuccessAction("Ciclo Completado", "Unidad arribada en base.") }}
                 onError={(m) => showAlert("Error", m, "error")}
             />

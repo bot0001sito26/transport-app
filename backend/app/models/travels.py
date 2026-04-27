@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum as SQLEnum, Index
 from sqlalchemy.orm import relationship
 from app.db.database import Base
-import datetime
+from app.core.timezone import ecuador_now
 import enum
 
 
@@ -14,35 +14,39 @@ class Travel(Base):
     __tablename__ = "travels"
 
     id = Column(Integer, primary_key=True, index=True)
-    # Estados: 'cargado', 'en_curso', 'retornando', 'finalizado', 'cancelado'
     status = Column(String, default="cargado", index=True)
 
-    # CORRECCIÓN: Usamos datetime.now para hora local
-    loaded_at = Column(DateTime, default=datetime.datetime.now, index=True)
-    start_time = Column(DateTime, nullable=True)
-    delivered_at = Column(DateTime, nullable=True)
-    end_time = Column(DateTime, nullable=True)
+    loaded_at = Column(DateTime, default=ecuador_now, index=True)
+    start_time = Column(DateTime, default=ecuador_now, nullable=True)
+    delivered_at = Column(DateTime, default=ecuador_now, nullable=True)
+    end_time = Column(DateTime, default=ecuador_now, nullable=True)
 
-    # Asignaciones
     truck_id = Column(Integer, ForeignKey("trucks.id"), index=True)
     driver_id = Column(Integer, ForeignKey(
         "users.id"), nullable=False, index=True)
     official_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     extra_official_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    # Datos Generales de Carga
     material_type = Column(String, index=True)
     weight_kg = Column(Float)
 
-    # Odómetros
     start_odometer = Column(Float, nullable=True)
     start_odometer_photo_url = Column(String, nullable=True)
     end_odometer = Column(Float, nullable=True)
     end_odometer_photo_url = Column(String, nullable=True)
 
-    # Relación principal: 1 Viaje tiene Muchos Destinos
+    # NUEVOS CAMPOS FINANCIEROS (Por Viaje Completo)
+    billing_status = Column(String, default="pendiente",
+                            index=True)  # 'pendiente', 'pagado'
+    amount_paid = Column(Float, default=0.0)
+    invoice_url = Column(String, nullable=True)  # Factura general del viaje
+
     destinations = relationship(
         "TravelDestination", back_populates="travel", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('ix_travels_truck_status_end', 'truck_id', 'status', 'end_time'),
+    )
 
 
 class TravelDestination(Base):
@@ -52,10 +56,15 @@ class TravelDestination(Base):
     travel_id = Column(Integer, ForeignKey(
         "travels.id", ondelete="CASCADE"), index=True)
     client_name = Column(String, index=True)
-    # 'pendiente', 'entregado'
+
     status = Column(String, default="pendiente", index=True)
 
-    # Relaciones
+    # CAMPOS LOGÍSTICOS DEL CLIENTE
+    # Lista de embarque (Se sube al cargar)
+    packing_list_url = Column(String, nullable=True)
+    # Foto de estibas (Se sube al descargar)
+    stowage_photo_url = Column(String, nullable=True)
+
     travel = relationship("Travel", back_populates="destinations")
     guides = relationship(
         "TravelGuide", back_populates="destination", cascade="all, delete-orphan")
@@ -68,12 +77,8 @@ class TravelGuide(Base):
     destination_id = Column(Integer, ForeignKey(
         "travel_destinations.id", ondelete="CASCADE"), index=True)
     photo_url = Column(String, nullable=False)
-    guide_type = Column(SQLEnum(GuideType), index=True,
-                        nullable=False)  # 'carga' o 'entrega'
+    guide_type = Column(SQLEnum(GuideType), index=True, nullable=False)
     weight_kg = Column(Float, nullable=True)
 
-    # CORRECCIÓN: Usamos datetime.now para hora local
-    created_at = Column(DateTime, default=datetime.datetime.now)
-
-    # Relaciones
+    created_at = Column(DateTime, default=ecuador_now)
     destination = relationship("TravelDestination", back_populates="guides")

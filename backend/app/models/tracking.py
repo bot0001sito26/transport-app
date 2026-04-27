@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Index
 from app.db.database import Base
-import datetime
+from app.core.timezone import ecuador_now
 
 
 class Location(Base):
@@ -11,18 +11,16 @@ class Location(Base):
     travel_id = Column(Integer, ForeignKey(
         "travels.id"), index=True, nullable=True)
 
-    # Coordenadas exactas
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-
-    # Velocidad en km/h
     speed = Column(Float, default=0.0)
 
-    # La hora exacta en la que el satélite tomó la posición
-    device_time = Column(DateTime, nullable=False, index=True)
-
-    # Para saber quién reportó esta coordenada: 'web_start', 'web_delivery', 'telegram', etc.
+    device_time = Column(DateTime, default=ecuador_now,
+                         nullable=False, index=True)
     source = Column(String)
+    created_at = Column(DateTime, default=ecuador_now)
 
-    # La hora en la que nuestro servidor guardó el dato
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    __table_args__ = (
+        Index('ix_locations_travel_time', 'travel_id', 'device_time'),
+        Index('ix_locations_truck_time', 'truck_id', 'device_time'),
+    )

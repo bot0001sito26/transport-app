@@ -65,8 +65,8 @@ export default function EditStaffModal({ isOpen, onClose, staff, onSuccess }) {
 
     return (
         <>
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-100 flex items-center justify-center p-4">
+                <div className="bg-white rounded-4xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
                     <div className="p-8">
                         <div className="flex justify-between items-start mb-6">
                             <div>

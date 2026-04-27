@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 # Iremos agregando los demás aquí
-from app.api.routers import auth, users, trucks, travels, upload, finances, tracking, telegram, reports
+from app.api.routers import auth, users, trucks, travels, upload, finances, tracking, telegram, reports, owner_notes
 
 api_router = APIRouter()
 
@@ -18,3 +18,5 @@ api_router.include_router(
 api_router.include_router(
     telegram.router, prefix="/telegram", tags=["Telegram Webhook"])
 api_router.include_router(reports.router, prefix="/reports", tags=["Reportes"])
+api_router.include_router(
+    owner_notes.router, prefix="/notes", tags=["Owner Notes"])

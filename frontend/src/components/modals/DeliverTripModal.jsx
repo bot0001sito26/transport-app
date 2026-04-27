@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../../api/axios';
-import { Camera, X, CheckCircle2, MapPin, PackageCheck, Scale, Clock } from 'lucide-react';
+import { Camera, X, CheckCircle2, PackageCheck, PackageOpen, FileText, ChevronDown } from 'lucide-react';
 
-// Función para asegurar que la imagen se pida al backend correcto
 const getImageUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
@@ -10,51 +9,54 @@ const getImageUrl = (path) => {
 };
 
 export default function DeliverTripModal({ isOpen, onClose, onSuccess, onError, travelId, truckId, activeTrip }) {
-    const fileInputRef = useRef(null);
-
-    // Estado para saber qué cliente específico estamos procesando para mostrar el "Cargando..."
     const [loadingDestId, setLoadingDestId] = useState(null);
+    const [expandedDestId, setExpandedDestId] = useState(null);
 
-    const [deliveryPhotos, setDeliveryPhotos] = useState({});
-    const [activeDestIdForUpload, setActiveDestIdForUpload] = useState(null);
+    // Mantenemos 1 foto de estiba y 1 foto de guía por destino
+    const [stowagePhotos, setStowagePhotos] = useState({});
+    const [guidePhotos, setGuidePhotos] = useState({});
+
+    useEffect(() => {
+        if (isOpen && activeTrip?.destinations?.length > 0) {
+            // Expandimos el primer destino que no esté entregado por defecto
+            const firstPending = activeTrip.destinations.find(d => d.status !== 'entregado');
+            if (firstPending) setExpandedDestId(firstPending.id);
+        }
+    }, [isOpen, activeTrip]);
 
     if (!isOpen || !activeTrip) return null;
-
     const destinations = activeTrip.destinations || [];
 
-    const triggerUpload = (destId) => {
-        setActiveDestIdForUpload(destId);
-        fileInputRef.current.click();
-    };
+    const toggleExpand = (id) => setExpandedDestId(expandedDestId === id ? null : id);
 
-    const handleFileChange = (e) => {
-        if (!activeDestIdForUpload) return;
-        const files = Array.from(e.target.files);
-        if (files.length > 0) {
-            const newPhotos = files.map(file => ({ file, preview: URL.createObjectURL(file) }));
-            setDeliveryPhotos(prev => ({
-                ...prev,
-                [activeDestIdForUpload]: [...(prev[activeDestIdForUpload] || []), ...newPhotos]
-            }));
-        }
+    const handleStowageChange = (destId, e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setStowagePhotos(prev => ({ ...prev, [destId]: { file, preview: URL.createObjectURL(file) } }));
         e.target.value = null;
-        setActiveDestIdForUpload(null);
     };
 
-    const removePhoto = (destId, indexToRemove) => {
-        setDeliveryPhotos(prev => ({
-            ...prev,
-            [destId]: prev[destId].filter((_, i) => i !== indexToRemove)
-        }));
+    const removeStowagePhoto = (destId) => {
+        setStowagePhotos(prev => { const newPhotos = { ...prev }; delete newPhotos[destId]; return newPhotos; });
     };
 
-    // FUNCIÓN: Entregar a UN SOLO CLIENTE a la vez
+    const handleGuideChange = (destId, e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setGuidePhotos(prev => ({ ...prev, [destId]: { file, preview: URL.createObjectURL(file) } }));
+        e.target.value = null;
+    };
+
+    const removeGuidePhoto = (destId) => {
+        setGuidePhotos(prev => { const newPhotos = { ...prev }; delete newPhotos[destId]; return newPhotos; });
+    };
+
     const handleDeliverSingle = async (destId) => {
-        const currentPhotos = deliveryPhotos[destId] || [];
+        const currentStowage = stowagePhotos[destId];
+        const currentGuide = guidePhotos[destId];
 
-        if (currentPhotos.length === 0) {
-            return onError("Debes subir la guía firmada por este cliente para confirmar su descarga.");
-        }
+        if (!currentStowage) return onError("Debes subir la foto de la estiba (evidencia del personal descargando).");
+        if (!currentGuide) return onError("Debes subir la guía firmada por este cliente para confirmar su descarga.");
 
         setLoadingDestId(destId);
 
@@ -63,47 +65,44 @@ export default function DeliverTripModal({ isOpen, onClose, onSuccess, onError, 
                 try {
                     const { latitude, longitude } = position.coords;
 
-                    // Auditoría GPS al momento de la entrega individual
                     await api.post('/tracking/', {
                         truck_id: truckId, travel_id: travelId, latitude, longitude, speed: 0,
                         device_time: new Date().toISOString(), source: "web_delivery"
                     });
 
-                    // Subir fotos solo de este cliente
-                    const uploadPromises = currentPhotos.map(p => {
-                        const formData = new FormData();
-                        formData.append('file', p.file);
-                        return api.post('/upload/guias_entrega', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
-                            .then(res => ({ photo_url: res.data.url, weight_kg: 0 })); // weight_kg 0 porque es guía de entrega
-                    });
+                    // 1. Subir foto de Estibas
+                    const stowageForm = new FormData();
+                    stowageForm.append('file', currentStowage.file);
+                    const stowageRes = await api.post('/upload/foto_estiba', stowageForm, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-                    const uploadedPhotos = await Promise.all(uploadPromises);
+                    // 2. Subir Guía de Entrega (1 sola)
+                    const guideForm = new FormData();
+                    guideForm.append('file', currentGuide.file);
+                    const guideRes = await api.post('/upload/guias_entrega', guideForm, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-                    // Payload parcial: Enviamos solo el destino que se está entregando
+                    // 3. Enviar payload (el backend espera arreglo, enviamos array de 1 elemento)
                     const payload = {
                         delivered_destinations: [{
                             destination_id: destId,
-                            delivery_photos: uploadedPhotos
+                            stowage_photo_url: stowageRes.data.url,
+                            delivery_photos: [{ photo_url: guideRes.data.url, weight_kg: 0 }]
                         }]
                     };
 
-                    // Guardamos la respuesta para saber en qué estado quedó el viaje
                     const response = await api.patch(`/travels/${travelId}/deliver`, payload);
                     const updatedTravel = response.data;
 
-                    // Limpiamos las fotos temporales de este destino
-                    setDeliveryPhotos(prev => {
-                        const newPhotos = { ...prev };
-                        delete newPhotos[destId];
-                        return newPhotos;
-                    });
+                    removeStowagePhoto(destId);
+                    removeGuidePhoto(destId);
 
-                    // --- AQUÍ ESTÁ EL CAMBIO DE LOS MENSAJES ---
                     const isFinished = updatedTravel.status === 'retornando';
 
                     if (isFinished) {
                         onSuccess("Ruta Completada", "Todos los puntos entregados. Iniciando retorno a base.", true);
                     } else {
+                        // Expandimos automáticamente el siguiente pendiente
+                        const nextPending = updatedTravel.destinations.find(d => d.status !== 'entregado');
+                        if (nextPending) setExpandedDestId(nextPending.id);
                         onSuccess("Entrega Parcial", "Descarga registrada. Continúe con el siguiente cliente.", false);
                     }
 
@@ -119,107 +118,139 @@ export default function DeliverTripModal({ isOpen, onClose, onSuccess, onError, 
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 sm:p-6 animate-in fade-in">
-            <div className="bg-white w-full max-w-xl rounded-[2rem] shadow-2xl flex flex-col max-h-[95vh] animate-in zoom-in-95 overflow-hidden border border-slate-100">
-                <div className="p-5 sm:p-7 overflow-y-auto scrollbar-hide">
-                    <div className="flex justify-between items-center mb-5 sticky top-0 bg-white z-20 pb-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-xl font-black text-atlas-navy tracking-tighter uppercase italic">Control de Entregas</h3>
-                        </div>
-                        <button onClick={onClose} className="p-2 bg-slate-50 hover:bg-slate-200 rounded-full text-slate-400 hover:text-atlas-navy transition-colors">
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-110 flex items-center justify-center p-4 sm:p-6 animate-in fade-in">
+            <div className="bg-white w-full max-w-2xl rounded-4xl shadow-2xl flex flex-col max-h-[95vh] animate-in zoom-in-95 overflow-hidden border border-slate-100">
 
-                    <input type="file" accept="image/*" multiple capture="environment" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                <div className="flex justify-between items-center p-5 sm:px-7 sm:py-5 border-b border-slate-100 bg-white z-20 shrink-0 shadow-sm">
+                    <h3 className="text-xl sm:text-2xl font-black text-atlas-navy tracking-tight uppercase italic">Control de Entregas</h3>
+                    <button onClick={onClose} className="p-2 bg-slate-50 hover:bg-slate-200 rounded-full text-slate-400 hover:text-atlas-navy transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
 
+                <div className="p-5 sm:p-7 overflow-y-auto scrollbar-hide flex-1">
                     {destinations.length === 0 ? (
                         <p className="text-center text-slate-500 py-4 text-sm font-bold">No hay destinos registrados.</p>
                     ) : (
                         <div className="space-y-4">
-                            {destinations.map(dest => {
-                                const loadGuides = dest.guides?.filter(g => g.guide_type === 'carga') || [];
-                                const deliveryGuides = dest.guides?.filter(g => g.guide_type === 'entrega') || [];
-                                const currentDeliveryPhotos = deliveryPhotos[dest.id] || [];
-
+                            {destinations.map((dest, index) => {
+                                const isExpanded = expandedDestId === dest.id;
                                 const isDelivered = dest.status === 'entregado';
                                 const isLoading = loadingDestId === dest.id;
+                                const stowagePreview = stowagePhotos[dest.id]?.preview;
+                                const guidePreview = guidePhotos[dest.id]?.preview;
+
+                                // Guías originales y de entrega enviadas desde el backend
+                                const loadGuides = dest.guides?.filter(g => g.guide_type === 'carga') || [];
+                                const deliveryGuides = dest.guides?.filter(g => g.guide_type === 'entrega') || [];
 
                                 return (
-                                    <div key={dest.id} className={`rounded-2xl border-2 shadow-sm p-4 transition-all ${isDelivered ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white border-slate-100'}`}>
+                                    <div key={dest.id} className={`bg-white border-2 rounded-2xl shadow-sm transition-all overflow-hidden ${isDelivered ? 'border-emerald-100 bg-emerald-50/20' : (isExpanded ? 'border-atlas-navy/30' : 'border-slate-100')}`}>
 
-                                        <div className="flex justify-between items-start mb-3">
-                                            <h4 className={`text-sm font-black uppercase tracking-tight flex items-center gap-2 ${isDelivered ? 'text-emerald-700' : 'text-atlas-navy'}`}>
-                                                <PackageCheck className="w-5 h-5 shrink-0" />
-                                                <span className="truncate">{dest.client_name}</span>
-                                            </h4>
-                                            {isDelivered && (
-                                                <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase px-2 py-1 rounded-md flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3" /> Completado
-                                                </span>
-                                            )}
+                                        {/* Cabecera Colapsable */}
+                                        <div
+                                            className="flex items-center justify-between p-3 sm:p-4 cursor-pointer select-none bg-slate-50/50"
+                                            onClick={() => toggleExpand(dest.id)}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs transition-colors ${isDelivered ? 'bg-emerald-100 text-emerald-600' : (isExpanded ? 'bg-atlas-navy text-atlas-yellow' : 'bg-slate-200 text-slate-500')}`}>
+                                                    {isDelivered ? <CheckCircle2 className="w-5 h-5" /> : index + 1}
+                                                </div>
+                                                <div>
+                                                    <h4 className={`text-xs md:text-sm font-black uppercase tracking-wide ${isDelivered ? 'text-emerald-700' : 'text-atlas-navy'}`}>
+                                                        {dest.client_name}
+                                                    </h4>
+                                                    {!isDelivered && loadGuides.length > 0 && (
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase">Carga: {loadGuides[0].weight_kg || '0'} Kg</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-3">
+                                                <ChevronDown className={`w-5 h-5 ${isDelivered ? 'text-emerald-400' : 'text-slate-400'} transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                            </div>
                                         </div>
 
-                                        {/* Guías Originales (Las que se cargaron) */}
-                                        {loadGuides.length > 0 && (
-                                            <div className="mb-4">
-                                                <p className="text-[9px] font-bold text-slate-400 uppercase mb-2">Guías por Entregar:</p>
-                                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                                    {loadGuides.map(guide => (
-                                                        <div key={guide.id} className="shrink-0 flex flex-col gap-1 items-center bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-                                                            <img
-                                                                src={getImageUrl(guide.photo_url)}
-                                                                className="w-12 h-12 rounded-lg object-cover border border-slate-200 opacity-90 hover:opacity-100 transition-all shadow-sm"
-                                                                alt="Carga"
-                                                            />
-                                                            {guide.weight_kg && (
-                                                                <span className="text-[8px] font-black text-slate-600 flex items-center gap-0.5">
-                                                                    <Scale className="w-2.5 h-2.5 text-slate-400" />
-                                                                    {guide.weight_kg} kg
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* Contenido Expandido */}
+                                        {isExpanded && (
+                                            <div className="p-4 sm:p-5 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
 
-                                        {/* Sección de Acción: Pendiente vs Entregado */}
-                                        {isDelivered ? (
-                                            <div className="pt-3 border-t border-emerald-200/60 border-dashed">
-                                                <p className="text-[9px] font-bold text-emerald-600 uppercase mb-2">Evidencia Entregada:</p>
-                                                <div className="flex gap-2">
-                                                    {deliveryGuides.map(guide => (
-                                                        <img key={guide.id} src={getImageUrl(guide.photo_url)} className="w-10 h-10 rounded-lg object-cover border border-emerald-200 shadow-sm" alt="Firma" />
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="pt-3 border-t border-slate-200 border-dashed">
-                                                <p className="text-[9px] font-bold text-atlas-navy uppercase mb-2">Sube la Evidencia (Firma / Sello):</p>
-                                                <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-                                                    {currentDeliveryPhotos.map((p, index) => (
-                                                        <div key={index} className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden border-2 border-atlas-navy shadow-sm">
-                                                            <img src={p.preview} className="w-full h-full object-cover" alt="Firmada" />
-                                                            <button type="button" onClick={() => removePhoto(dest.id, index)} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full scale-75 shadow-md">
-                                                                <X className="w-4 h-4" />
-                                                            </button>
+                                                {isDelivered ? (
+                                                    <div className="space-y-4">
+                                                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                                                            <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+                                                                <CheckCircle2 className="w-4 h-4" /> Entrega Verificada
+                                                            </p>
+                                                            <div className="flex gap-3 overflow-x-auto">
+                                                                {dest.stowage_photo_url && (
+                                                                    <div className="w-20 h-20 shrink-0 relative rounded-lg overflow-hidden border border-emerald-200 shadow-sm">
+                                                                        <img src={getImageUrl(dest.stowage_photo_url)} className="w-full h-full object-cover" alt="Estiba" />
+                                                                    </div>
+                                                                )}
+                                                                {deliveryGuides.map(guide => (
+                                                                    <div key={guide.id} className="w-20 h-20 shrink-0 relative rounded-lg overflow-hidden border border-emerald-200 shadow-sm">
+                                                                        <img src={getImageUrl(guide.photo_url)} className="w-full h-full object-cover" alt="Firma" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
-                                                    ))}
-
-                                                    <div onClick={() => triggerUpload(dest.id)} className="w-14 h-14 shrink-0 border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-atlas-navy/5 hover:border-atlas-navy/40 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors">
-                                                        <Camera className="w-4 h-4 text-slate-400 mb-0.5" />
-                                                        <span className="text-[7px] font-black uppercase text-slate-500 text-center">Añadir</span>
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {/* 1. Foto Estibas */}
+                                                            <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex flex-col">
+                                                                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 text-center">1. Foto Estibas</label>
+                                                                <div className="flex-1">
+                                                                    {stowagePreview ? (
+                                                                        <div className="relative w-full h-28 border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                                                            <img src={stowagePreview} className="w-full h-full object-cover" alt="Estiba" />
+                                                                            <button type="button" onClick={() => removeStowagePhoto(dest.id)} className="absolute top-1.5 right-1.5 bg-red-500 text-white p-1.5 rounded-full shadow-md hover:bg-red-600 active:scale-95 transition-all">
+                                                                                <X className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-slate-100 hover:border-atlas-navy/40 cursor-pointer transition-all group/upload">
+                                                                            <PackageOpen className="w-6 h-6 text-slate-400 group-hover/upload:text-atlas-navy mb-1.5 transition-colors" />
+                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest group-hover/upload:text-atlas-navy transition-colors">Subir Foto</span>
+                                                                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleStowageChange(dest.id, e)} />
+                                                                        </label>
+                                                                    )}
+                                                                </div>
+                                                            </div>
 
-                                                <button
-                                                    disabled={isLoading || currentDeliveryPhotos.length === 0}
-                                                    onClick={() => handleDeliverSingle(dest.id)}
-                                                    className="w-full bg-atlas-navy hover:bg-slate-800 text-atlas-yellow py-3 rounded-xl font-black text-xs shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none disabled:text-slate-500 flex items-center justify-center gap-2"
-                                                >
-                                                    {isLoading ? "GUARDANDO EVIDENCIA Y GPS..." : "CONFIRMAR DESCARGA AQUÍ"}
-                                                </button>
+                                                            {/* 2. Guía Sellada (ÚNICA) */}
+                                                            <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex flex-col">
+                                                                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 text-center">2. Guía Sellada</label>
+                                                                <div className="flex-1 flex flex-col gap-2">
+                                                                    {guidePreview ? (
+                                                                        <div className="relative w-full h-28 border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                                                            <img src={guidePreview} className="w-full h-full object-cover" alt="Guía" />
+                                                                            <button type="button" onClick={() => removeGuidePhoto(dest.id)} className="absolute top-1.5 right-1.5 bg-red-500 text-white p-1.5 rounded-full shadow-md hover:bg-red-600 active:scale-95 transition-all">
+                                                                                <X className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-slate-100 hover:border-atlas-navy/40 cursor-pointer transition-all group/upload">
+                                                                            <FileText className="w-6 h-6 text-slate-400 group-hover/upload:text-atlas-navy mb-1.5 transition-colors" />
+                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest group-hover/upload:text-atlas-navy transition-colors">Subir Guía</span>
+                                                                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleGuideChange(dest.id, e)} />
+                                                                        </label>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Botón con mb-6 y mt-6 para que NUNCA choque */}
+                                                        <button
+                                                            disabled={isLoading || !stowagePreview || !guidePreview}
+                                                            onClick={() => handleDeliverSingle(dest.id)}
+                                                            className="w-full mt-6 bg-atlas-navy hover:bg-slate-800 text-atlas-yellow py-4 rounded-xl font-black text-[13px] shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none disabled:text-slate-500 flex items-center justify-center gap-2"
+                                                        >
+                                                            {isLoading ? "GUARDANDO EVIDENCIA Y GPS..." : "CONFIRMAR DESCARGA"}
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

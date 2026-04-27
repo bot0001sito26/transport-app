@@ -13,3 +13,4 @@ pyinstaller
 python-dateutil
 reportlab
 httpx
+tzdata

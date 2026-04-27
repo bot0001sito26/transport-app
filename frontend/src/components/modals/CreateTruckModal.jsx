@@ -4,7 +4,7 @@ import { X, Truck, Save, Loader2 } from 'lucide-react';
 
 export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }) {
     const [formData, setFormData] = useState({
-        plate: '', brand: '', model: '', capacity_tons: '', tracking_type: 'telegram', tracklink_id: ''
+        plate: '', brand: '', model: '', capacity_tons: ''
     });
     const [loading, setLoading] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
@@ -13,12 +13,18 @@ export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }
 
     const validateForm = () => {
         const errors = {};
-        if (!formData.plate.trim()) errors.plate = "Obligatorio";
-        else if (!/^[A-Z0-9-]+$/i.test(formData.plate)) errors.plate = "Formato: ABC-1234";
+
+        // ESTA ES LA MAGIA: Obliga exactamente a formato 'ABC-1234'
+        if (!formData.plate.trim()) {
+            errors.plate = "Obligatorio";
+        } else if (!/^[A-Z]{3}-\d{4}$/i.test(formData.plate)) {
+            errors.plate = "Exacto: ABC-1234 (3 letras, 4 números)";
+        }
+
         if (!formData.brand.trim()) errors.brand = "Obligatorio";
         if (!formData.model.trim()) errors.model = "Obligatorio";
         if (!formData.capacity_tons || isNaN(formData.capacity_tons) || Number(formData.capacity_tons) <= 0) errors.capacity_tons = "Inválido";
-        if (formData.tracking_type === 'tracklink' && !formData.tracklink_id.trim()) errors.tracklink_id = "Requerido";
+
         setFieldErrors(errors);
         return Object.keys(errors).length === 0;
     };
@@ -31,11 +37,10 @@ export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }
             const payload = {
                 ...formData,
                 plate: formData.plate.toUpperCase().trim(),
-                capacity_tons: parseFloat(formData.capacity_tons),
-                tracklink_id: formData.tracking_type === 'telegram' ? null : formData.tracklink_id.trim()
+                capacity_tons: parseFloat(formData.capacity_tons)
             };
             const response = await api.post('/trucks/', payload);
-            setFormData({ plate: '', brand: '', model: '', capacity_tons: '', tracking_type: 'telegram', tracklink_id: '' });
+            setFormData({ plate: '', brand: '', model: '', capacity_tons: '' });
             setFieldErrors({});
             onSuccess(response.data);
         } catch (error) {
@@ -51,8 +56,8 @@ export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
+            <div className="bg-white rounded-4xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
 
                 {/* Cabecera */}
                 <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -80,6 +85,7 @@ export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }
                                     let val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
                                     if (val.length === 3 && !val.includes('-')) val += '-';
                                     setFormData({ ...formData, plate: val });
+                                    if (fieldErrors.plate) setFieldErrors({ ...fieldErrors, plate: null });
                                 }}
                                 maxLength={8}
                                 placeholder="ABC-1234"
@@ -110,7 +116,7 @@ export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }
                             />
                         </div>
 
-                        <div>
+                        <div className="col-span-2">
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Tonelaje</label>
                             <input
                                 type="number"
@@ -121,32 +127,6 @@ export default function CreateTruckModal({ isOpen, onClose, onSuccess, onError }
                                 placeholder="Ej. 12.5"
                             />
                         </div>
-
-                        <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Telemetría</label>
-                            <select
-                                value={formData.tracking_type}
-                                onChange={e => setFormData({ ...formData, tracking_type: e.target.value })}
-                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-atlas-navy focus:ring-1 focus:ring-atlas-navy/30 transition-all text-sm font-medium text-atlas-navy cursor-pointer"
-                            >
-                                <option value="telegram">Telegram</option>
-                                <option value="tracklink">Tracklink</option>
-                            </select>
-                        </div>
-
-                        {formData.tracking_type === 'tracklink' && (
-                            <div className="col-span-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">ID Dispositivo Tracklink</label>
-                                <input
-                                    type="text"
-                                    value={formData.tracklink_id}
-                                    onChange={e => { setFormData({ ...formData, tracklink_id: e.target.value }); if (fieldErrors.tracklink_id) setFieldErrors({ ...fieldErrors, tracklink_id: null }); }}
-                                    className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl focus:outline-none focus:border-atlas-navy focus:ring-1 focus:ring-atlas-navy/30 transition-all font-mono text-sm text-atlas-navy ${fieldErrors.tracklink_id ? 'border-red-300 focus:ring-red-400' : 'border-slate-200'}`}
-                                    placeholder="TK-987654321"
-                                />
-                                {fieldErrors.tracklink_id && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase tracking-wide">{fieldErrors.tracklink_id}</p>}
-                            </div>
-                        )}
                     </div>
 
                     <div className="flex gap-3 pt-4 mt-2">

@@ -16,22 +16,13 @@ const formatExpenseDetail = (item) => {
 
 // NUEVO HELPER MEJORADO: Busca en el viaje, luego en el camión
 const getSpenderName = (userId, nestedUser, trip) => {
-    // 1. Si el gasto trae el usuario anidado (lo ideal)
     if (nestedUser?.full_name) return nestedUser.full_name.toUpperCase();
-
-    // 2. Si el usuario coincide con los tripulantes guardados en el viaje
     if (trip?.driver?.id === userId) return trip.driver.full_name?.toUpperCase() || 'CHOFER';
     if (trip?.official?.id === userId) return trip.official.full_name?.toUpperCase() || 'OFICIAL';
-
-    // 3. Fallback: Si el viaje solo trajo los IDs planos
     if (trip?.driver_id === userId) return 'CHOFER';
     if (trip?.official_id === userId) return 'OFICIAL';
-
-    // 4. Fallback extremo: Buscar en el camión por si acaso
     if (trip?.truck?.driver?.id === userId) return trip.truck.driver.full_name?.toUpperCase() || 'CHOFER';
     if (trip?.truck?.official?.id === userId) return trip.truck.official.full_name?.toUpperCase() || 'OFICIAL';
-
-    // 5. Si nada de lo anterior coincide, fue alguien externo
     return 'ADMINISTRACIÓN';
 };
 
@@ -111,7 +102,6 @@ export const buildTripSummaryPDF = async (trip, expenses, kms, totalGastos, form
 
     if (expenses && expenses.length > 0) {
         const expensesBody = expenses.map(exp => {
-            // Lógica para enriquecer la descripción del gasto
             let desc = (exp.description || 'SIN DESCRIPCIÓN').toUpperCase();
             if (exp.category && exp.category.toUpperCase() === 'COMBUSTIBLE') {
                 const extras = [];
@@ -124,7 +114,7 @@ export const buildTripSummaryPDF = async (trip, expenses, kms, totalGastos, form
                 formatDateTime(exp.created_at),
                 (exp.category || 'OTRO').toUpperCase(),
                 desc,
-                getSpenderName(exp.user_id, exp.user, trip), // PASAMOS EL OBJETO TRIP COMPLETO AQUÍ
+                getSpenderName(exp.user_id, exp.user, trip),
                 `$${exp.amount.toFixed(2)}`
             ];
         });
@@ -161,11 +151,24 @@ export const buildTripSummaryPDF = async (trip, expenses, kms, totalGastos, form
     if (trip.guide_photo_url) opPhotos.push({ title: "GUÍA DE REMISIÓN", url: trip.guide_photo_url });
     if (trip.delivery_photo_url) opPhotos.push({ title: "GUÍA SELLADA", url: trip.delivery_photo_url });
 
+    // --- CORRECCIÓN DE NOMBRES LARGOS ---
     trip.destinations?.forEach(dest => {
+        let rawName = dest.client_name ? dest.client_name.toUpperCase() : 'CLIENTE';
+        // Si el nombre pasa de 12 letras, lo cortamos y le ponemos "..." para evitar superposiciones
+        const shortClientName = rawName.length > 12 ? rawName.substring(0, 12) + '...' : rawName;
+
         dest.guides?.forEach(g => {
-            const labelName = g.guide_type === 'carga' ? `GUÍA CARGA (${dest.client_name})` : `GUÍA SELLADA (${dest.client_name})`;
-            opPhotos.push({ title: labelName.toUpperCase(), url: g.photo_url });
+            const labelName = g.guide_type === 'carga' ? `GUÍA CARGA (${shortClientName})` : `GUÍA SELLADA (${shortClientName})`;
+            opPhotos.push({ title: labelName, url: g.photo_url });
         });
+
+        if (dest.packing_list_url) {
+            opPhotos.push({ title: `LISTA EMBARQUE (${shortClientName})`, url: dest.packing_list_url });
+        }
+
+        if (dest.stowage_photo_url) {
+            opPhotos.push({ title: `FOTO ESTIBAS (${shortClientName})`, url: dest.stowage_photo_url });
+        }
     });
 
     if (opPhotos.length > 0) {

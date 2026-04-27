@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../api/axios';
-import { ArrowLeft, UserCircle2, HardHat, ShieldCheck, Loader2, Gauge, Fuel, Activity, Settings2, Route, Receipt, Wallet, LayoutDashboard, RefreshCcw } from 'lucide-react';
+import {
+    ArrowLeft, UserCircle2, HardHat, ShieldCheck, Loader2, Gauge,
+    Fuel, Activity, Settings2, Route, Receipt, Wallet, LayoutDashboard, RefreshCcw
+} from 'lucide-react';
 
 import CreateStaffModal from '../../modals/CreateStaffModal';
 import EditStaffModal from '../../modals/EditStaffModal';
@@ -10,10 +13,10 @@ import AlertModal from '../../modals/AlertModal';
 import TripLiquidationModal from '../../modals/TripLiquidationModal';
 import AddFundModal from '../../modals/AddFundModal';
 import ImagePreviewModal from '../../modals/ImagePreviewModal';
+import StaffLedgerModal from '../../modals/StaffLedgerModal'; // <-- NUEVO COMPONENTE
 
 import HistoryTab from '../crew/tabs/HistoryTab';
 import ExpensesTab from '../crew/tabs/ExpensesTab';
-import PaymentsTab from '../crew/tabs/PaymentsTab';
 
 export default function TruckDetailView({ truckId, onBack }) {
     const queryClient = useQueryClient();
@@ -22,6 +25,8 @@ export default function TruckDetailView({ truckId, onBack }) {
     const [staffModal, setStaffModal] = useState({ isOpen: false, type: 'driver' });
     const [editModal, setEditModal] = useState({ isOpen: false, staffData: null });
     const [payModal, setPayModal] = useState({ isOpen: false, staffData: null });
+    const [ledgerModal, setLedgerModal] = useState({ isOpen: false, staffData: null }); // <-- NUEVO ESTADO
+
     const [alertData, setAlertData] = useState({ isOpen: false, title: '', message: '', type: 'success' });
     const [liquidationModal, setLiquidationModal] = useState({ isOpen: false, travelId: null });
     const [isFundModalOpen, setIsFundModalOpen] = useState(false);
@@ -60,7 +65,7 @@ export default function TruckDetailView({ truckId, onBack }) {
 
     return (
         <div className="animate-in fade-in duration-300 max-w-6xl mx-auto pb-12 bg-slate-50 min-h-screen">
-            {/* Header Fijo (Sticky) para no perder el botón de volver en móviles */}
+            {/* Header Fijo (Sticky) */}
             <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-md px-3 pt-3 pb-2 border-b border-slate-200">
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
@@ -75,20 +80,19 @@ export default function TruckDetailView({ truckId, onBack }) {
                             </div>
                         </div>
                     </div>
-                    {/* Botón Amarillo Corporativo para el Dinero */}
                     <button onClick={() => setIsFundModalOpen(true)} className="p-2 md:px-3 md:py-2 bg-atlas-yellow text-atlas-navy rounded-lg font-black uppercase shadow-sm active:scale-95 flex items-center gap-1.5 hover:bg-[#eab308]">
                         <Wallet className="w-4 h-4 md:w-4 md:h-4" /> <span className="hidden md:inline text-[10px] tracking-wider">Caja Chica</span>
                     </button>
                 </div>
 
                 <div className="flex gap-1 overflow-x-auto hide-scrollbar bg-slate-200/50 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('overview')} className={`flex-1 min-w-[100px] py-1.5 px-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'overview' ? 'bg-white text-atlas-navy shadow-sm' : 'text-slate-500 hover:text-atlas-navy'}`}>
+                    <button onClick={() => setActiveTab('overview')} className={`flex-1 min-w-20 md:min-w-25 py-1.5 px-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'overview' ? 'bg-white text-atlas-navy shadow-sm' : 'text-slate-500 hover:text-atlas-navy'}`}>
                         <LayoutDashboard className="w-3 h-3 inline mr-1" /> Resumen
                     </button>
-                    <button onClick={() => setActiveTab('routes')} className={`flex-1 min-w-[100px] py-1.5 px-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'routes' ? 'bg-white text-atlas-navy shadow-sm' : 'text-slate-500 hover:text-atlas-navy'}`}>
+                    <button onClick={() => setActiveTab('routes')} className={`flex-1 min-w-20 md:min-w-25 py-1.5 px-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'routes' ? 'bg-white text-atlas-navy shadow-sm' : 'text-slate-500 hover:text-atlas-navy'}`}>
                         <Route className="w-3 h-3 inline mr-1" /> Viajes
                     </button>
-                    <button onClick={() => setActiveTab('expenses')} className={`flex-1 min-w-[100px] py-1.5 px-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'expenses' ? 'bg-white text-atlas-navy shadow-sm' : 'text-slate-500 hover:text-atlas-navy'}`}>
+                    <button onClick={() => setActiveTab('expenses')} className={`flex-1 min-w-20 md:min-w-25 py-1.5 px-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'expenses' ? 'bg-white text-atlas-navy shadow-sm' : 'text-slate-500 hover:text-atlas-navy'}`}>
                         <Receipt className="w-3 h-3 inline mr-1" /> Gastos
                     </button>
                 </div>
@@ -97,21 +101,25 @@ export default function TruckDetailView({ truckId, onBack }) {
             <div className="p-3 mt-2">
                 {activeTab === 'overview' && (
                     <div className="space-y-3 animate-in fade-in">
-
-                        {/* Grid de Métricas Ultra Denso (3 columnas) */}
+                        {/* MÉTRICAS CAJA Y OPERACIÓN... (Igual que antes) */}
                         <div className="grid grid-cols-3 gap-2">
-                            {/* Caja Chica Full Width Arriba */}
                             <div className="col-span-3 bg-atlas-navy border border-slate-800 p-3.5 rounded-xl shadow-md flex justify-between items-center">
                                 <div>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Caja Chica Disponible</p>
-                                    <p className="text-3xl font-black text-atlas-yellow">${truck.current_balance?.toFixed(2) || '0.00'}</p>
+                                    <p className="text-3xl font-black text-atlas-yellow">
+                                        ${truck.current_balance?.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                                    </p>
                                 </div>
                                 <Wallet className="w-8 h-8 text-slate-700 opacity-50" />
                             </div>
 
                             {[
                                 { label: 'Km Total', val: `${totalKm}`, icon: Gauge },
-                                { label: 'Combustible', val: `$${totalFuelExpenses.toFixed(0)}`, icon: Fuel },
+                                {
+                                    label: 'Combustible',
+                                    val: `$${totalFuelExpenses.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                                    icon: Fuel
+                                },
                                 { label: 'Viajes', val: `${totalTrips}`, icon: Activity }
                             ].map((item, i) => (
                                 <div key={i} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center">
@@ -122,16 +130,17 @@ export default function TruckDetailView({ truckId, onBack }) {
                             ))}
                         </div>
 
-                        {/* Listado de Tripulación Horizontal (Adiós tarjetas gigantes) */}
+                        {/* TRIPULACIÓN */}
                         <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
                             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                 <ShieldCheck className="w-4 h-4 text-atlas-navy" /> Tripulación de Unidad
                             </h3>
 
-                            <div className="space-y-2">
+                            <div className="space-y-2 max-h-45 overflow-y-auto pr-1 hide-scrollbar">
                                 {[
                                     { role: 'Operador', data: truck.driver, type: 'driver', icon: UserCircle2 },
-                                    { role: 'Oficial', data: truck.official, type: 'official', icon: HardHat }
+                                    { role: 'Oficial', data: truck.official, type: 'official', icon: HardHat },
+                                    { role: 'Oficial Extra', data: truck.extra_official, type: 'extra_official', icon: HardHat }
                                 ].map((staff, i) => (
                                     <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 gap-3">
                                         <div className="flex items-center gap-3">
@@ -141,7 +150,7 @@ export default function TruckDetailView({ truckId, onBack }) {
                                             <div>
                                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">{staff.role}</p>
                                                 {staff.data ? (
-                                                    <p className="text-xs font-black text-atlas-navy truncate max-w-[150px]">{staff.data.full_name}</p>
+                                                    <p className="text-xs font-black text-atlas-navy truncate max-w-37.5">{staff.data.full_name}</p>
                                                 ) : (
                                                     <p className="text-xs font-bold text-rose-500">Sin Asignar</p>
                                                 )}
@@ -151,13 +160,17 @@ export default function TruckDetailView({ truckId, onBack }) {
                                         <div className="flex gap-1.5 self-end sm:self-auto">
                                             {staff.data ? (
                                                 <>
-                                                    <button onClick={() => setPayModal({ isOpen: true, staffData: staff.data })} className="bg-atlas-navy text-white px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider hover:bg-slate-800 transition-colors">
+                                                    {/* BOTÓN DE HISTORIAL (NUEVO) */}
+                                                    <button onClick={() => setLedgerModal({ isOpen: true, staffData: staff.data })} className="bg-white border border-slate-200 text-emerald-600 px-2.5 py-1.5 rounded-md hover:bg-emerald-50 transition-colors shadow-sm" title="Ver Historial de Pagos">
+                                                        <Receipt className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => setPayModal({ isOpen: true, staffData: staff.data })} className="bg-atlas-navy text-white px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-sm">
                                                         Pago
                                                     </button>
-                                                    <button onClick={() => setEditModal({ isOpen: true, staffData: staff.data })} className="bg-white border border-slate-200 text-slate-600 px-2.5 py-1.5 rounded-md hover:bg-slate-100 transition-colors">
+                                                    <button onClick={() => setEditModal({ isOpen: true, staffData: staff.data })} className="bg-white border border-slate-200 text-slate-600 px-2.5 py-1.5 rounded-md hover:bg-slate-100 transition-colors shadow-sm">
                                                         <Settings2 className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <button onClick={() => setStaffModal({ isOpen: true, type: staff.type })} className="bg-white border border-slate-200 text-blue-500 px-2.5 py-1.5 rounded-md hover:bg-slate-100 transition-colors">
+                                                    <button onClick={() => setStaffModal({ isOpen: true, type: staff.type })} className="bg-white border border-slate-200 text-blue-500 px-2.5 py-1.5 rounded-md hover:bg-slate-100 transition-colors shadow-sm">
                                                         <RefreshCcw className="w-3.5 h-3.5" />
                                                     </button>
                                                 </>
@@ -172,38 +185,44 @@ export default function TruckDetailView({ truckId, onBack }) {
                             </div>
                         </div>
 
-                        {/* Ficha técnica compactada en 2x2 */}
+                        {/* FICHA TÉCNICA... (Igual) */}
                         <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
                             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                 <Settings2 className="w-4 h-4 text-atlas-navy" /> Ficha Técnica
                             </h3>
-                            <div className="grid grid-cols-2 gap-y-3 gap-x-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                            <div className="grid grid-cols-3 gap-y-3 gap-x-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                                 <div><span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">Marca</span><span className="text-xs font-black text-atlas-navy">{truck.brand || '--'}</span></div>
                                 <div><span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">Modelo</span><span className="text-xs font-black text-atlas-navy">{truck.model || '--'}</span></div>
                                 <div><span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">Capacidad</span><span className="text-xs font-black text-atlas-navy">{truck.capacity_tons} TON</span></div>
-                                <div><span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">GPS</span><span className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">{truck.tracking_type}</span></div>
                             </div>
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'routes' && (
-                    <div className="bg-white rounded-2xl p-2 md:p-3 border border-slate-200 shadow-sm min-h-[50vh] animate-in fade-in">
+                    <div className="bg-white rounded-2xl p-2 md:p-3 border border-slate-200 shadow-sm h-[60vh] overflow-y-auto hide-scrollbar animate-in fade-in">
                         <HistoryTab truckId={truckId} formatDateTime={formatDateTime} handleOpenPreview={handleOpenPreview} onOpenLiquidation={(id) => setLiquidationModal({ isOpen: true, travelId: id })} />
                     </div>
                 )}
 
                 {activeTab === 'expenses' && (
-                    <div className="bg-white rounded-2xl p-2 md:p-3 border border-slate-200 shadow-sm min-h-[50vh] animate-in fade-in">
+                    <div className="bg-white rounded-2xl p-2 md:p-3 border border-slate-200 shadow-sm h-[60vh] overflow-y-auto hide-scrollbar animate-in fade-in">
                         <ExpensesTab truck={truck} formatDateTime={formatDateTime} handleOpenPreview={handleOpenPreview} />
                     </div>
                 )}
             </div>
 
-            {/* Modales mantenidos intactos */}
             <CreateStaffModal isOpen={staffModal.isOpen} staffType={staffModal.type} truckId={truckId} onClose={() => setStaffModal({ ...staffModal, isOpen: false })} onSuccess={() => { refetch(); setStaffModal({ ...staffModal, isOpen: false }); showAlert('Personal Asignado', 'Empleado registrado correctamente.'); }} />
             <EditStaffModal isOpen={editModal.isOpen} onClose={() => setEditModal({ isOpen: false, staffData: null })} staff={editModal.staffData} onSuccess={() => { refetch(); setEditModal({ isOpen: false, staffData: null }); showAlert('Sincronizado', 'Perfil actualizado.'); }} />
-            <PayCrewModal isOpen={payModal.isOpen} onClose={() => setPayModal({ isOpen: false, staffData: null })} staffData={payModal.staffData} travelId={null} onSuccess={() => { refetch(); setPayModal({ isOpen: false, staffData: null }); showAlert('Pago Registrado', 'La transacción se ha guardado en el historial.'); }} />
+            <PayCrewModal isOpen={payModal.isOpen} onClose={() => setPayModal({ isOpen: false, staffData: null })} staffData={payModal.staffData} travelId={null} onSuccess={() => { refetch(); setPayModal({ isOpen: false, staffData: null }); showAlert('Pago Registrado', 'La transacción se ha guardado en el historial.'); }} onError={(msg) => showAlert('Error', msg, 'error')} />
+
+            {/* NUEVO MODAL DE ESTADO DE CUENTA */}
+            <StaffLedgerModal
+                isOpen={ledgerModal.isOpen}
+                onClose={() => setLedgerModal({ isOpen: false, staffData: null })}
+                staffData={ledgerModal.staffData}
+                onOpenPreview={handleOpenPreview}
+            />
             <TripLiquidationModal isOpen={liquidationModal.isOpen} travelId={liquidationModal.travelId} onClose={() => setLiquidationModal({ isOpen: false, travelId: null })} />
             <AlertModal isOpen={alertData.isOpen} onClose={() => setAlertData({ ...alertData, isOpen: false })} title={alertData.title} message={alertData.message} type={alertData.type} />
             <AddFundModal isOpen={isFundModalOpen} onClose={() => setIsFundModalOpen(false)} truckId={truckId} onSuccess={() => { setIsFundModalOpen(false); queryClient.invalidateQueries({ queryKey: ['truckDetail', truckId] }); queryClient.invalidateQueries({ queryKey: ['truckFundsHistory', truckId] }); showAlert('Fondo Actualizado', 'Caja chica recargada.'); }} />

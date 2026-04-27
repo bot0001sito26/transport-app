@@ -1,31 +1,76 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../api/axios';
-import { WalletCards, Banknote, Coins, Clock, Eye, ChevronDown, Download } from 'lucide-react';
+import { WalletCards, Banknote, Coins, Clock, Eye, Download, X, Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 export default function PaymentsTab({ user, formatDateTime, handleOpenPreview }) {
-    const [paymentsLimit, setPaymentsLimit] = useState(20);
+    if (!user) {
+        return (
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm h-[75vh] md:h-[65vh] flex flex-col items-center justify-center animate-in fade-in">
+                <WalletCards className="w-10 h-10 text-slate-200 mb-3" />
+                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Sin Tripulación</h4>
+                <p className="text-[10px] text-slate-400 mt-1 font-bold">Asigna un operador al camión para ver su nómina.</p>
+            </div>
+        );
+    }
 
-    const { data: userAdvances } = useQuery({
-        queryKey: ['userAdvances', user.id, paymentsLimit],
-        queryFn: async () => { try { return (await api.get(`/finances/advances/user/${user.id}?limit=${paymentsLimit}&skip=0`)).data; } catch { return []; } },
+    // Filtros vacíos por defecto
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
+    // Paginación (5 items)
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5;
+
+    useEffect(() => { setCurrentPage(1); }, [startDate, endDate]);
+
+    const { data: userAdvances, isLoading: loadingAdvances } = useQuery({
+        queryKey: ['userAdvances', user.id],
+        queryFn: async () => { try { return (await api.get(`/finances/advances/user/${user.id}?limit=1000&skip=0`)).data; } catch { return []; } },
         enabled: !!user.id,
         refetchOnWindowFocus: true
     });
 
-    const { data: userSalaries } = useQuery({
-        queryKey: ['userSalaries', user.id, paymentsLimit],
-        queryFn: async () => { try { return (await api.get(`/finances/salaries/user/${user.id}?limit=${paymentsLimit}&skip=0`)).data; } catch { return []; } },
+    const { data: userSalaries, isLoading: loadingSalaries } = useQuery({
+        queryKey: ['userSalaries', user.id],
+        queryFn: async () => { try { return (await api.get(`/finances/salaries/user/${user.id}?limit=1000&skip=0`)).data; } catch { return []; } },
         enabled: !!user.id,
         refetchOnWindowFocus: true
     });
 
-    const myPayments = [
-        ...(userAdvances || []).map(a => ({ ...a, displayType: 'Viático', date: a.date_given })),
-        ...(userSalaries || []).map(s => ({ ...s, displayType: 'Sueldo', date: s.date_paid }))
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const getEcuadorDateString = (dateString) => {
+        if (!dateString) return '';
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(dateString.replace(' ', 'T')));
+    };
+
+    const myPayments = useMemo(() => {
+        const combined = [
+            ...(userAdvances || []).map(a => ({ ...a, displayType: 'Viático', date: a.date_given })),
+            ...(userSalaries || []).map(s => ({ ...s, displayType: 'Sueldo', date: s.date_paid }))
+        ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        if (!startDate && !endDate) return combined;
+
+        return combined.filter(payment => {
+            const paymentDate = getEcuadorDateString(payment.date);
+            if (startDate && endDate) return paymentDate >= startDate && paymentDate <= endDate;
+            if (startDate) return paymentDate >= startDate;
+            if (endDate) return paymentDate <= endDate;
+            return true;
+        });
+    }, [userAdvances, userSalaries, startDate, endDate]);
+
+    // Calcular datos de paginación
+    const totalPages = Math.ceil(myPayments.length / itemsPerPage) || 1;
+    const paginatedPayments = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return myPayments.slice(startIndex, startIndex + itemsPerPage);
+    }, [myPayments, currentPage]);
+
+    const clearFilters = () => { setStartDate(''); setEndDate(''); };
+    const hasActiveFilters = startDate || endDate;
 
     const handleExportPDF = () => {
         const doc = new jsPDF();
@@ -38,7 +83,7 @@ export default function PaymentsTab({ user, formatDateTime, handleOpenPreview })
         const tableColumn = ["Fecha", "Tipo", "Descripción", "Monto"];
         const tableRows = [];
 
-        myPayments.forEach(payment => {
+        myPayments.forEach(payment => { // Exporta todo lo filtrado, no solo la página actual
             tableRows.push([
                 formatDateTime(payment.date),
                 payment.displayType,
@@ -49,7 +94,7 @@ export default function PaymentsTab({ user, formatDateTime, handleOpenPreview })
 
         doc.autoTable({
             head: [tableColumn], body: tableRows, startY: 40, theme: 'grid',
-            headStyles: { fillColor: [12, 39, 60] }, // atlas-navy aprox
+            headStyles: { fillColor: [12, 39, 60] },
             styles: { fontSize: 10 }
         });
 
@@ -57,24 +102,42 @@ export default function PaymentsTab({ user, formatDateTime, handleOpenPreview })
         doc.save(`Ingresos_${safeName}.pdf`);
     };
 
+    if (loadingAdvances || loadingSalaries) {
+        return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-atlas-yellow" /></div>;
+    }
+
     return (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in duration-300 min-h-[350px] flex flex-col">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
-                <h4 className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><WalletCards className="w-4 h-4" /> HISTORIAL DE PAGOS</h4>
-                <button
-                    onClick={handleExportPDF}
-                    disabled={myPayments.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-atlas-navy text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors disabled:opacity-50"
-                >
-                    <Download className="w-4 h-4" /> PDF
-                </button>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm h-[75vh] md:h-[65vh] flex flex-col animate-in fade-in duration-300">
+            <div className="flex flex-col gap-3 mb-4 pb-4 border-b border-slate-100 shrink-0">
+                <div className="flex justify-between items-center">
+                    <h4 className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <WalletCards className="w-4 h-4" /> HISTORIAL DE PAGOS
+                    </h4>
+                    <div className="flex items-center gap-2">
+                        {hasActiveFilters && <button onClick={clearFilters} className="p-1.5 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100"><X className="w-4 h-4" /></button>}
+                        <button
+                            onClick={handleExportPDF}
+                            disabled={myPayments.length === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-atlas-navy text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors disabled:opacity-50"
+                        >
+                            <Download className="w-3.5 h-3.5" /> PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex flex-1 items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-bold text-slate-600 focus:outline-none w-full" />
+                    <span className="text-[10px] font-black text-slate-400">AL</span>
+                    <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent text-[10px] md:text-xs font-bold text-slate-600 focus:outline-none w-full" />
+                </div>
             </div>
 
-            <div className="space-y-3 flex-1">
-                {myPayments.length > 0 ? myPayments.map((payment, idx) => {
+            <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                {paginatedPayments.length > 0 ? paginatedPayments.map((payment, idx) => {
                     const paymentImgUrl = payment.photo_url || payment.receipt_url || payment.voucher_url;
                     return (
-                        <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 shrink-0 animate-in slide-in-from-right-2">
                             <div className="flex-1 min-w-0 pr-3">
                                 <div className="flex items-center gap-2 mb-1.5">
                                     <div className={`p-1.5 rounded-lg ${payment.displayType === 'Sueldo' ? 'bg-atlas-navy text-white' : 'bg-atlas-yellow text-atlas-navy'}`}>
@@ -102,15 +165,39 @@ export default function PaymentsTab({ user, formatDateTime, handleOpenPreview })
                 }) : (
                     <div className="text-center py-12">
                         <WalletCards className="w-8 h-8 text-slate-200 mx-auto mb-3" />
-                        <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-widest">AÚN NO HAY PAGOS REGISTRADOS</p>
+                        <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-widest">NO HAY RESULTADOS</p>
                     </div>
                 )}
             </div>
 
-            {myPayments.length >= paymentsLimit && (
-                <button onClick={() => setPaymentsLimit(prev => prev + 20)} className="mt-4 w-full py-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] md:text-xs font-black text-atlas-navy uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-100">
-                    <ChevronDown className="w-4 h-4" /> CARGAR MÁS PAGOS
-                </button>
+            {/* Controles de Paginación Fijos al fondo */}
+            {totalPages > 1 && (
+                <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between shrink-0">
+                    <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                        className="p-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 transition-colors"
+                    >
+                        <ChevronLeft className="w-4 h-4 text-atlas-navy" />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:inline">Página</span>
+                        <div className="bg-slate-50 px-3 py-1 rounded-md border border-slate-200">
+                            <span className="text-xs font-black text-atlas-navy">{currentPage}</span>
+                            <span className="text-[10px] font-bold text-slate-400 mx-1">/</span>
+                            <span className="text-[10px] font-bold text-slate-400">{totalPages}</span>
+                        </div>
+                    </div>
+
+                    <button
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        className="p-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 transition-colors"
+                    >
+                        <ChevronRight className="w-4 h-4 text-atlas-navy" />
+                    </button>
+                </div>
             )}
         </div>
     );

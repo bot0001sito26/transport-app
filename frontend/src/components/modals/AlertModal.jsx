@@ -8,7 +8,7 @@ export default function AlertModal({ isOpen, onClose, title, message, type = 'su
     const isInfo = type === 'info';
 
     return (
-        <div className="fixed inset-0 bg-atlas-navy/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-atlas-navy/50 backdrop-blur-sm z-200 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-100 animate-in fade-in zoom-in-95 duration-200">
                 <div className="p-6 md:p-8 text-center">
                     <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-6 ${isSuccess ? 'bg-emerald-100 text-emerald-600' :

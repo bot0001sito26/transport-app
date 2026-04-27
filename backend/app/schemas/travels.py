@@ -27,6 +27,7 @@ class TravelGuide(TravelGuideBase):
 class GuideCreateItem(BaseModel):
     photo_url: str
     weight_kg: float
+
 # --- 2. SCHEMAS DE DESTINOS (CLIENTES) ---
 
 
@@ -35,26 +36,33 @@ class TravelDestinationBase(BaseModel):
 
 
 class DestinationCreateItem(TravelDestinationBase):
-    # Al crear el viaje, recibimos las fotos de carga para este cliente
+    packing_list_url: str
     load_photos: List[GuideCreateItem]
+
+
+class DestinationDeliverItem(BaseModel):
+    destination_id: int
+    stowage_photo_url: str
+    delivery_photos: List[GuideCreateItem]
 
 
 class TravelDestination(TravelDestinationBase):
     id: int
     travel_id: int
     status: str
+    packing_list_url: Optional[str] = None
+    stowage_photo_url: Optional[str] = None
     guides: List[TravelGuide] = []
     model_config = ConfigDict(from_attributes=True)
 
 
-class DestinationDeliverItem(BaseModel):
-    # Al reportar entrega, decimos a qué destino le pertenecen las fotos firmadas
-    destination_id: int
-    delivery_photos: List[GuideCreateItem]
+# --- NUEVO SCHEMA DE COBRANZA (Por Viaje) ---
+class TravelPaymentUpdate(BaseModel):
+    amount_paid: float
+    invoice_url: Optional[str] = None
+
 
 # --- 3. SCHEMAS DE VIAJE ---
-
-
 class TravelBase(BaseModel):
     truck_id: int
     driver_id: int
@@ -65,7 +73,6 @@ class TravelBase(BaseModel):
 
 
 class TravelCreate(TravelBase):
-    # Reemplazamos destination_client y photo_url por la lista de destinos estructurada
     destinations: List[DestinationCreateItem]
 
 
@@ -75,7 +82,6 @@ class TravelStart(BaseModel):
 
 
 class TravelDeliver(BaseModel):
-    # Recibimos las fotos firmadas mapeadas a sus respectivos destinos
     delivered_destinations: List[DestinationDeliverItem]
 
 
@@ -97,7 +103,11 @@ class Travel(TravelBase):
     end_odometer: Optional[float] = None
     end_odometer_photo_url: Optional[str] = None
 
-    # Array anidado que FastAPI devolverá automáticamente gracias a SQLAlchemy
+    # FACTURACIÓN
+    billing_status: str
+    amount_paid: float
+    invoice_url: Optional[str] = None
+
     destinations: List[TravelDestination] = []
 
     model_config = ConfigDict(from_attributes=True)

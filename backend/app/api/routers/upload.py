@@ -1,120 +1,56 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Path, HTTPException, status
-from typing import Dict
-from datetime import datetime
-import shutil
 import os
-from PIL import Image
-
-from app.api.deps import get_current_user
-from app.models.users import User
+import shutil
+import uuid
+from fastapi import APIRouter, UploadFile, File, HTTPException
 
 router = APIRouter()
 
-UPLOAD_BASE_DIR = "uploads"
-
-# Mapeo de la URL (category) hacia la RUTA REAL de la carpeta en el servidor
-ALLOWED_CATEGORIES = {
-    "guias_emision": "guias/remision",  # <-- Actualizado a tu nueva estructura
-    "guias_entrega": "guias/sellada",   # <-- Actualizado a tu nueva estructura
-    "combustible": "combustible",
-    "peaje": "peajes",
-    "comida": "alimentacion",
-    "mecanica": "mecanica",
-    "otros": "otros",
-    "viaticos": "viaticos",
-    "fondos": "fondos",
-    "sueldos": "sueldos",
-    "odometro_inicial": "odometro/inicial",
-    "odometro_final": "odometro/final"
-}
-
-# Nombres más amigables para guardar el archivo (Lo que leerás en el explorador de Windows/Linux)
-FILE_NAME_MAP = {
-    "guias_emision": "guia_remision",
-    "guias_entrega": "guia_sellada",
-    "combustible": "combustible",
-    "peaje": "peaje",
-    "comida": "viatico_comida",
-    "mecanica": "mecanica",
-    "otros": "otros_gastos",
-    "viaticos": "viatico_efectivo",
-    "fondos": "abono_fondo",
-    "sueldos": "sueldo",
-    "odometro_inicial": "odometro_salida",
-    "odometro_final": "odometro_llegada"
-}
+# Directorio base para subidas
+BASE_UPLOAD_DIR = "uploads"
 
 
-@router.post("/{category}", response_model=Dict[str, str])
-def upload_image_by_category(
-    category: str = Path(..., description="Categoria del archivo"),
-    file: UploadFile = File(...),
-    travel_id: str = Form(default="patio"),
-    current_user: User = Depends(get_current_user)
-):
-    if category not in ALLOWED_CATEGORIES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Categoria invalida. Opciones: {', '.join(ALLOWED_CATEGORIES.keys())}"
-        )
+def save_file(file: UploadFile, subfolder: str) -> str:
+    folder_path = os.path.join(BASE_UPLOAD_DIR, subfolder)
 
-    # Protección: Solo dueños pueden subir comprobantes de dinero (viáticos, fondos, sueldos)
-    if category in ["viaticos", "fondos", "sueldos"] and current_user.role not in ["owner", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permisos insuficientes para procesar documentos financieros."
-        )
+    # Respaldo de seguridad por si envían una carpeta que no estaba en el main.py
+    os.makedirs(folder_path, exist_ok=True)
 
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
-    file_ext = os.path.splitext(file.filename)[1].lower()
+    # Extraemos la extensión original o ponemos png por defecto
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
 
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Formato de archivo no permitido"
-        )
-
-    # Aquí lee la ruta de tu nueva estructura (ej. "guias/remision")
-    sub_path = ALLOWED_CATEGORIES[category]
-    full_dir_path = os.path.join(UPLOAD_BASE_DIR, sub_path)
-    os.makedirs(full_dir_path, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Aseguramos que el prefijo tenga sentido
-    prefix = f"viaje{travel_id}" if travel_id != "patio" else "patio"
-    friendly_category_name = FILE_NAME_MAP.get(category, category)
+    # Generamos un nombre único (UUID) para evitar que archivos con el mismo nombre se chanquen
+    unique_filename = f"{uuid.uuid4().hex}.{ext}"
+    file_path = os.path.join(folder_path, unique_filename)
 
     try:
-        # LÓGICA DE OPTIMIZACIÓN DE IMÁGENES
-        if file_ext in [".jpg", ".jpeg", ".png", ".webp"]:
-            # Abrimos la imagen usando Pillow
-            image = Image.open(file.file)
-
-            # Si tiene canal alpha (transparencia de PNG) lo quitamos para poder guardarlo como JPG
-            if image.mode in ("RGBA", "P"):
-                image = image.convert("RGB")
-
-            # Redimensionar (máximo 1024x1024, mantiene la proporción automáticamente)
-            image.thumbnail((1024, 1024))
-
-            # Ejemplo de nombre final: viaje12_guia_remision_20260410_013237.jpg
-            unique_filename = f"{prefix}_{friendly_category_name}_{timestamp}.jpg"
-            file_path = os.path.join(full_dir_path, unique_filename)
-
-            # Guardamos comprimiendo al 70% de calidad (excelente para documentos)
-            image.save(file_path, format="JPEG", optimize=True, quality=70)
-
-        else:
-            # Si es PDF, lo guardamos tal cual de forma binaria
-            unique_filename = f"{prefix}_{friendly_category_name}_{timestamp}{file_ext}"
-            file_path = os.path.join(full_dir_path, unique_filename)
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-
-    except Exception as exc:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:  # pylint: disable=broad-except
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error fisico al procesar y guardar el archivo"
-        ) from exc
+            status_code=500, detail="Error interno al guardar el archivo") from e
 
-    return {"url": f"/static/{sub_path}/{unique_filename}"}
+    # Devolvemos la ruta relativa para que el frontend la pueda renderizar sumándole la URL de la API
+    return f"/{BASE_UPLOAD_DIR}/{subfolder}/{unique_filename}"
+
+
+@router.post("/")
+def upload_generic_file(file: UploadFile = File(...)):
+    """Endpoint genérico si no se especifica carpeta (se va a 'otros')"""
+    url = save_file(file, "otros")
+    return {"url": url}
+
+
+@router.post("/{folder:path}")
+def upload_folder_file(folder: str, file: UploadFile = File(...)):
+    """
+    Endpoint dinámico que respeta la estructura. 
+    Ej: POST /upload/sueldos -> se va a uploads/sueldos
+    Ej: POST /upload/guias/sellada -> se va a uploads/guias/sellada
+    """
+    # Seguridad básica para evitar que suban niveles (Directory Traversal)
+    safe_folder = folder.replace("..", "").strip("/")
+    if not safe_folder:
+        safe_folder = "otros"
+
+    url = save_file(file, safe_folder)
+    return {"url": url}

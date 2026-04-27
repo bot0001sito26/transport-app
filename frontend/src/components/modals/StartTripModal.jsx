@@ -90,8 +90,8 @@ export default function StartTripModal({ isOpen, onClose, onSuccess, onError, tr
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden p-8 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-110 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-sm rounded-4xl shadow-2xl overflow-hidden p-8 animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-2">
                         <div className="w-2 h-6 bg-atlas-yellow rounded-full"></div>
